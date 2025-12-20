@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: sentinel-consumer-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: sentinel-consumer-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+
+server:
+  port: 8081
+
+logging:
+  level:
+    com.sentinel.consumer: DEBUG
+    org.springframework.kafka: INFO
