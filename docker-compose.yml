@@ -20,7 +20,7 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      CLUSTER_ID: "${KAFKA_CLUSTER_ID:?A unique KAFKA_CLUSTER_ID must be set}"
+      CLUSTER_ID: "BgH2lZBXSE2QwcI6R8AOxA"
     networks:
       - sentinel-network
     healthcheck:
@@ -32,8 +32,8 @@ services:
   # Sentinel Ingestion Service
   sentinel-ingestion:
     build:
-      context: ./sentinel-ingestion-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./sentinel-ingestion-service/Dockerfile
     container_name: sentinel-ingestion-service
     ports:
       - "8080:8080"
@@ -49,8 +49,8 @@ services:
   # Sentinel Consumer Service
   sentinel-consumer:
     build:
-      context: ./sentinel-consumer-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./sentinel-consumer-service/Dockerfile
     container_name: sentinel-consumer-service
     ports:
       - "8081:8081"
