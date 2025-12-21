@@ -80,13 +80,97 @@ docker compose logs -f
 
 ## Local Development
 
-To build the project locally without Docker:
+### Building the Project
+
+To build the entire multi-module project locally without Docker:
 
 ```bash
 mvn clean package
 ```
 
-To run individual services locally, ensure you have a Kafka instance running (or use the one from Docker Compose) and configure `application.yml` to point to `localhost:9092`.
+This will:
+- Compile all three modules ([sentinel-common](sentinel-common/), [sentinel-ingestion-service](sentinel-ingestion-service/), [sentinel-consumer-service](sentinel-consumer-service/))
+- Generate Protobuf classes
+- Run code formatting checks (Spotless)
+- Execute tests
+- Package the applications as executable JARs
+
+### Running Services Individually
+
+To run services locally for development, follow these steps:
+
+#### Step 1: Start Kafka via Docker Compose
+
+First, ensure you have Kafka running. The easiest way is to use the Docker Compose Kafka instance:
+
+```bash
+docker compose up kafka -d
+```
+
+Verify Kafka is running:
+
+```bash
+docker compose ps kafka
+```
+
+#### Step 2: Configure Application Settings
+
+The services use [application.yml](sentinel-consumer-service/src/main/resources/application.yml) files for configuration. The Kafka bootstrap server is already configured with a sensible default:
+
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+```
+
+By default, services will connect to `localhost:9092`. If you need to override this:
+
+```bash
+export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+```
+
+#### Step 3: Run Individual Services
+
+Run the **Ingestion Service** (port 8080):
+
+```bash
+mvn spring-boot:run -pl sentinel-ingestion-service
+```
+
+Run the **Consumer Service** (port 8081):
+
+```bash
+mvn spring-boot:run -pl sentinel-consumer-service
+```
+
+Alternatively, you can run the packaged JARs directly:
+
+```bash
+# After running mvn clean package
+java -jar sentinel-ingestion-service/target/sentinel-ingestion-service-1.0.0-SNAPSHOT.jar
+java -jar sentinel-consumer-service/target/sentinel-consumer-service-1.0.0-SNAPSHOT.jar
+```
+
+#### Step 4: Verify Services are Running
+
+Check that the services are responding:
+
+```bash
+# Ingestion Service health check
+curl http://localhost:8080/actuator/health
+
+# Consumer Service health check
+curl http://localhost:8081/actuator/health
+```
+
+### Development Tips
+
+- **Hot Reload**: Both services include Spring Boot DevTools for automatic restart during development.
+- **Logs**: Each service logs to the console. Consumer service uses DEBUG level logging for `com.sentinel.consumer` package.
+- **Shared Module**: Changes to [sentinel-common](sentinel-common/) require rebuilding dependent modules:
+  ```bash
+  mvn clean install -pl sentinel-common
+  ```
 
 ## Security
 
