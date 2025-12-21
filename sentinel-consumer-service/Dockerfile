@@ -5,11 +5,12 @@ WORKDIR /app
 COPY pom.xml .
 COPY sentinel-common/pom.xml ./sentinel-common/pom.xml
 COPY sentinel-consumer-service/pom.xml ./sentinel-consumer-service/pom.xml
+COPY sentinel-ingestion-service/pom.xml ./sentinel-ingestion-service/pom.xml
 
 RUN mvn dependency:go-offline -B
 
-COPY sentinel-common ./sentinel-common
-COPY sentinel-consumer-service ./sentinel-consumer-service
+COPY sentinel-common/src ./sentinel-common/src
+COPY sentinel-consumer-service/src ./sentinel-consumer-service/src
 
 # Build the project
 RUN mvn clean package -pl sentinel-consumer-service -am -DskipTests

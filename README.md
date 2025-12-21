@@ -35,6 +35,12 @@ Before running the stack, you must configure the Kafka Cluster ID. Create a `.en
 touch .env
 ```
 
+Generate a Kafka cluster ID:
+
+```bash
+docker run --rm confluentinc/cp-kafka:7.5.0 kafka-storage random-uuid
+```
+
 Add the following content to `.env`:
 
 ```dotenv
