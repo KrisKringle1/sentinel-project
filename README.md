@@ -38,8 +38,7 @@ touch .env
 Add the following content to `.env`:
 
 ```dotenv
-# Kafka KRaft Cluster ID (Example UUID)
-KAFKA_CLUSTER_ID=BgH2lZBXSE2QwcI6R8AOxA
+KAFKA_CLUSTER_ID=<your-generated-id>
 ```
 
 ### 2. Run with Docker Compose
