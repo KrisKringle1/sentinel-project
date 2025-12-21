@@ -1,0 +1,115 @@
+# Pre-commit hooks for Sentinel Project
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # Prevent large files from being committed
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+
+      # Check for files that would conflict in case-insensitive filesystems
+      - id: check-case-conflict
+
+      # Ensure files end with a newline
+      - id: end-of-file-fixer
+        exclude: '\.jar$'
+
+      # Remove trailing whitespace
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+
+      # Check YAML syntax
+      - id: check-yaml
+        args: ['--unsafe']  # Allow custom tags in docker-compose
+
+      # Check for merge conflicts
+      - id: check-merge-conflict
+
+      # Prevent committing to main/master
+      - id: no-commit-to-branch
+        args: ['--branch', 'main', '--branch', 'master']
+
+      # Check JSON syntax
+      - id: check-json
+
+      # Check XML syntax (for pom.xml files)
+      - id: check-xml
+
+  # Docker-related checks
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: ['--ignore', 'DL3008', '--ignore', 'DL3009']
+
+  # Secrets detection
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package-lock.json
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.42.0
+    hooks:
+      - id: markdownlint
+        args: ['--fix']
+
+  # Maven specific checks
+  - repo: local
+    hooks:
+      # Validate Maven wrapper
+      - id: maven-wrapper-check
+        name: Check Maven wrapper exists
+        entry: bash -c 'test -f mvnw && test -f mvnw.cmd'
+        language: system
+        pass_filenames: false
+        files: '^pom\.xml$'
+
+      # Run Spotless formatting check
+      - id: spotless-check
+        name: Maven Spotless Check
+        entry: ./mvnw spotless:check
+        language: system
+        pass_filenames: false
+        files: '\.java$'
+
+      # Validate all POM files
+      - id: maven-validate
+        name: Maven Validate
+        entry: ./mvnw validate
+        language: system
+        pass_filenames: false
+        files: 'pom\.xml$'
+
+      # Run Maven compile to catch compilation errors
+      - id: maven-compile
+        name: Maven Compile
+        entry: ./mvnw clean compile -DskipTests
+        language: system
+        pass_filenames: false
+        files: '\.(java|xml)$|src/'
+
+      # Run tests before commit
+      - id: maven-test
+        name: Maven Test
+        entry: ./mvnw test
+        language: system
+        pass_filenames: false
+        files: '\.(java|xml)$|src/'
+
+  # Docker Compose validation
+  - repo: local
+    hooks:
+      - id: docker-compose-check
+        name: Docker Compose Config Check
+        entry: bash -c 'docker compose config > /dev/null'
+        language: system
+        files: '^docker-compose\.yml$'
+        pass_filenames: false

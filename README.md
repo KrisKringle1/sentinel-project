@@ -24,8 +24,40 @@ The project is organized as a Maven multi-module monorepo:
 - Docker Desktop
 - Java 17 SDK (for local development)
 - Maven (optional, if using the wrapper)
+- Python 3.8+ (for pre-commit hooks, optional but recommended)
 
 ## Getting Started
+
+### 0. Set Up Pre-Commit Hooks (Optional but Recommended)
+
+Pre-commit hooks help maintain code quality by running automated checks before each commit.
+
+Install pre-commit:
+
+```bash
+pip install pre-commit
+```
+
+Install the git hooks:
+
+```bash
+pre-commit install
+```
+
+The hooks will now run automatically on each commit. To run them manually on all files:
+
+```bash
+pre-commit run --all-files
+```
+
+Configured checks include:
+- File formatting (trailing whitespace, end-of-file newlines)
+- Dockerfile linting (hadolint)
+- Secrets detection
+- Markdown linting
+- Maven Spotless formatting
+- Maven compilation and tests
+- Docker Compose validation
 
 ### 1. Environment Configuration
 
