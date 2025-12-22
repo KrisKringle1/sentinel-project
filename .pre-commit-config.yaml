@@ -95,6 +95,7 @@ repos:
         language: system
         pass_filenames: false
         files: '\.(java|xml)$|src/'
+        stages: [push]
 
   # Docker Compose validation
   - repo: local

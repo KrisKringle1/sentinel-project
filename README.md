@@ -51,6 +51,7 @@ pre-commit run --all-files
 ```
 
 Configured checks include:
+
 - File formatting (trailing whitespace, end-of-file newlines)
 - Dockerfile linting (hadolint)
 - Secrets detection
@@ -61,10 +62,10 @@ Configured checks include:
 
 ### 1. Environment Configuration
 
-Before running the stack, you must configure the Kafka Cluster ID. Create a `.env` file in the root directory:
+Before running the stack, you must configure the Kafka Cluster ID. Create a `.env` file from the template:
 
 ```bash
-touch .env
+cp .env.example .env
 ```
 
 Generate a Kafka cluster ID:
@@ -127,6 +128,7 @@ mvn clean package
 ```
 
 This will:
+
 - Compile all three modules ([sentinel-common](sentinel-common/), [sentinel-ingestion-service](sentinel-ingestion-service/), [sentinel-consumer-service](sentinel-consumer-service/))
 - Generate Protobuf classes
 - Run code formatting checks (Spotless)

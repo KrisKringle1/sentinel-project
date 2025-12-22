@@ -6,7 +6,6 @@ spring:
     consumer:
       group-id: sentinel-metrics-consumer
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      # This is the fix: Use StringDeserializer to match the producer's StringSerializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: earliest
       properties:
