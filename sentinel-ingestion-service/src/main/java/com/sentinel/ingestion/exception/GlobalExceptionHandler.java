@@ -38,7 +38,8 @@ public class GlobalExceptionHandler {
     ErrorResponse errorResponse =
         new ErrorResponse(
             HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            "An internal error occurred while processing the metric. Please use this ID for support: " + errorId,
+            "An internal error occurred while processing the metric. Please use this ID for support: "
+                + errorId,
             LocalDateTime.now(),
             Collections.emptyList());
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);

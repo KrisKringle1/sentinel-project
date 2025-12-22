@@ -1,6 +1,8 @@
 # Sentinel Project
 
-Sentinel is a multi-module microservices platform designed for high-throughput data ingestion and processing. It utilizes **Spring Boot 3** and **Apache Kafka** (running in KRaft mode without ZooKeeper) to decouple ingestion from processing.
+Sentinel is a multi-module microservices platform designed for high-throughput data ingestion and processing.
+It utilizes **Spring Boot 3** and **Apache Kafka** (running in KRaft mode without ZooKeeper) to decouple
+ingestion from processing.
 
 ## Project Structure
 
@@ -90,10 +92,10 @@ docker compose up -d --build
 
 This command will:
 
-1.  Compile the Maven project (leveraging Docker layer caching).
-2.  Build the Docker images for the services.
-3.  Start a single-node Kafka cluster in KRaft mode.
-4.  Start the Ingestion and Consumer services.
+1. Compile the Maven project (leveraging Docker layer caching).
+2. Build the Docker images for the services.
+3. Start a single-node Kafka cluster in KRaft mode.
+4. Start the Ingestion and Consumer services.
 
 ### 3. Verify Services
 
@@ -129,7 +131,8 @@ mvn clean package
 
 This will:
 
-- Compile all three modules ([sentinel-common](sentinel-common/), [sentinel-ingestion-service](sentinel-ingestion-service/), [sentinel-consumer-service](sentinel-consumer-service/))
+- Compile all three modules ([sentinel-common](sentinel-common/),
+  [sentinel-ingestion-service](sentinel-ingestion-service/), [sentinel-consumer-service](sentinel-consumer-service/))
 - Generate Protobuf classes
 - Run code formatting checks (Spotless)
 - Execute tests
@@ -155,7 +158,8 @@ docker compose ps kafka
 
 #### Step 2: Configure Application Settings
 
-The services use [application.yml](sentinel-consumer-service/src/main/resources/application.yml) files for configuration. The Kafka bootstrap server is already configured with a sensible default:
+The services use [application.yml](sentinel-consumer-service/src/main/resources/application.yml) files for configuration.
+The Kafka bootstrap server is already configured with a sensible default:
 
 ```yaml
 spring:
@@ -208,6 +212,7 @@ curl http://localhost:8081/actuator/health
 - **Hot Reload**: Both services include Spring Boot DevTools for automatic restart during development.
 - **Logs**: Each service logs to the console. Consumer service uses DEBUG level logging for `com.sentinel.consumer` package.
 - **Shared Module**: Changes to [sentinel-common](sentinel-common/) require rebuilding dependent modules:
+
   ```bash
   mvn clean install -pl sentinel-common
   ```

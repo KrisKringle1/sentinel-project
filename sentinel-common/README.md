@@ -15,6 +15,7 @@ Shared library module containing common code used across Sentinel services.
 This module is automatically included as a dependency in other Sentinel services.
 
 Add to your service's `pom.xml`:
+
 ```xml
 <dependency>
     <groupId>com.sentinel</groupId>
