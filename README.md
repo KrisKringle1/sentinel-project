@@ -168,7 +168,7 @@ docker compose logs -f
 To build the entire multi-module project locally without Docker:
 
 ```bash
-mvn clean package
+./mvnw clean package
 ```
 
 This will:

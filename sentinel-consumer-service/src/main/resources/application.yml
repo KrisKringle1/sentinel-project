@@ -9,7 +9,8 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: earliest
       properties:
-        # For exactly-once processing semantics, if your producer is transactional
+        # Ensures consumer only reads committed messages. This is a step towards
+        # exactly-once semantics and requires a transactional or idempotent producer.
         isolation.level: read_committed
 
 server:
