@@ -1,7 +1,6 @@
 package com.sentinel.ingestion.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sentinel.common.avro.SentinelMetric;
 import com.sentinel.ingestion.dto.MetricRequest;
 import com.sentinel.ingestion.exception.MetricProcessingException;
 import java.util.concurrent.CompletableFuture;
@@ -15,27 +14,39 @@ import org.springframework.stereotype.Service;
 @Service
 public class MetricProducerService {
 
-  private final KafkaTemplate<String, String> kafkaTemplate;
-  private final ObjectMapper objectMapper;
+  private final KafkaTemplate<String, SentinelMetric> kafkaTemplate;
   private final String topic;
   private final String dlqTopic;
 
   public MetricProducerService(
-      KafkaTemplate<String, String> kafkaTemplate,
-      ObjectMapper objectMapper,
+      KafkaTemplate<String, SentinelMetric> kafkaTemplate,
       @Value("${sentinel.ingestion.topic.metrics:service-metrics}") String topic,
       @Value("${sentinel.ingestion.topic.metrics.dlq:service-metrics-dlq}") String dlqTopic) {
     this.kafkaTemplate = kafkaTemplate;
-    this.objectMapper = objectMapper;
     this.topic = topic;
     this.dlqTopic = dlqTopic;
   }
 
-  public CompletableFuture<SendResult<String, String>> sendMetric(MetricRequest request) {
+  public CompletableFuture<SendResult<String, SentinelMetric>> sendMetric(MetricRequest request) {
     try {
-      String payload = objectMapper.writeValueAsString(request);
-      CompletableFuture<SendResult<String, String>> future =
-          kafkaTemplate.send(topic, request.serviceId(), payload);
+      if (request == null) {
+        throw new MetricProcessingException("MetricRequest cannot be null");
+      }
+
+      if (request.serviceId() == null || request.serviceId().isBlank()) {
+        throw new MetricProcessingException("ServiceId cannot be null or empty");
+      }
+
+      SentinelMetric metric =
+          SentinelMetric.newBuilder()
+              .setServiceId(request.serviceId())
+              .setMetricName(request.metricName())
+              .setValue(request.value())
+              .setTimestamp(request.timestamp())
+              .build();
+
+      CompletableFuture<SendResult<String, SentinelMetric>> future =
+          kafkaTemplate.send(topic, request.serviceId(), metric);
 
       future
           .thenAccept(
@@ -50,20 +61,20 @@ public class MetricProducerService {
               ex -> {
                 log.error(
                     "Unable to send message=[{}] to topic=[{}]. Sending to DLQ...",
-                    payload,
+                    metric,
                     topic,
                     ex);
-                sendToDlq(request.serviceId(), payload);
+                sendToDlq(request.serviceId(), metric);
                 return null;
               });
       return future;
-    } catch (JsonProcessingException e) {
-      log.error("Error converting MetricRequest to JSON", e);
-      throw new MetricProcessingException("Failed to serialize metric to JSON", e);
+    } catch (Exception e) {
+      log.error("Error processing metric request", e);
+      throw new MetricProcessingException("Failed to process metric", e);
     }
   }
 
-  private void sendToDlq(String key, String payload) {
+  private void sendToDlq(String key, SentinelMetric payload) {
     kafkaTemplate
         .send(dlqTopic, key, payload)
         .whenComplete(

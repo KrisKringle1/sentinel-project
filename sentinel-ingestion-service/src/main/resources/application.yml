@@ -1,14 +1,22 @@
 spring:
-  application:
-    name: sentinel-ingestion-service
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: localhost:9092
     producer:
+      # Use String for the Key (e.g., Device ID)
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-      acks: all
-      retries: 3
+      # Use Avro for the Value (The actual metric payload)
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
       properties:
+        # The URL where your Schema Registry container is listening
+        schema.registry.url: http://localhost:8081
+
+        # STAFF LEVEL CONFIG: Idempotence
+        # Ensures that even if the network flickers, we don't send duplicate metrics.
+        enable.idempotence: true
+        acks: all
+        retries: 5
+      properties:
+        schema.registry.url: http://localhost:8085
         enable.idempotence: true
 
 server:

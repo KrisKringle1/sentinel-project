@@ -18,6 +18,12 @@
 
 
     <dependencies>
+        <!-- Sentinel Common -->
+        <dependency>
+            <groupId>com.sentinel</groupId>
+            <artifactId>sentinel-common</artifactId>
+        </dependency>
+
         <!-- Spring Boot Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
