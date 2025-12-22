@@ -23,6 +23,12 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- Spring Boot Actuator for Health Checks -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Spring for Apache Kafka -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
