@@ -24,7 +24,13 @@ services:
     networks:
       - sentinel-network
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      test:
+        [
+          "CMD",
+          "kafka-broker-api-versions",
+          "--bootstrap-server",
+          "localhost:9092",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,8 +38,8 @@ services:
   # Sentinel Ingestion Service
   sentinel-ingestion:
     build:
-      context: ./sentinel-ingestion-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./sentinel-ingestion-service/Dockerfile
     container_name: sentinel-ingestion-service
     ports:
       - "8080:8080"
@@ -49,8 +55,8 @@ services:
   # Sentinel Consumer Service
   sentinel-consumer:
     build:
-      context: ./sentinel-consumer-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./sentinel-consumer-service/Dockerfile
     container_name: sentinel-consumer-service
     ports:
       - "8081:8081"

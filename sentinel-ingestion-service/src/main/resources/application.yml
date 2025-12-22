@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: sentinel-ingestion-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.sentinel.ingestion: DEBUG
+
+sentinel:
+  ingestion:
+    topic:
+      metrics: service-metrics
+      metrics-dlq: service-metrics-dlq
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true

@@ -1,159 +1,264 @@
 # Sentinel Project
 
-A multi-module monorepo for the Sentinel platform, containing microservices for data ingestion and processing.
+Sentinel is a multi-module microservices platform designed for high-throughput data ingestion and processing.
+It utilizes **Spring Boot 3** and **Apache Kafka** (running in KRaft mode without ZooKeeper) to decouple
+ingestion from processing.
 
 ## Project Structure
 
-```
+The project is organized as a Maven multi-module monorepo:
+
+```text
 sentinel-project/
-├── .git/                        # Single Git repository for the entire project
-├── docker-compose.yml           # Orchestrates Kafka + All Services
-├── pom.xml                      # Parent POM managing all modules
-├── .env                         # Environment variables
-├── .gitignore                   # Root-level gitignore
+├── sentinel-ingestion-service/     # HTTP ingestion service
+│   ├── src/main/java/com/sentinel/ingestion/
+│   │   ├── SentinelIngestionServiceApplication.java
+│   │   ├── controller/
+│   │   │   └── MetricsController.java          # REST endpoints for metric ingestion
+│   │   ├── service/
+│   │   │   └── MetricProducerService.java      # Kafka producer logic
+│   │   ├── dto/
+│   │   │   ├── MetricRequest.java              # HTTP request DTOs
+│   │   │   └── ErrorResponse.java              # Error response model
+│   │   └── exception/
+│   │       ├── GlobalExceptionHandler.java     # Centralized error handling
+│   │       └── MetricProcessingException.java
+│   ├── src/main/resources/
+│   │   └── application.yml                     # Service configuration
+│   ├── Dockerfile                              # Container image definition
+│   └── pom.xml                                 # Module dependencies
 │
-├── sentinel-ingestion-service/  # Data ingestion microservice
-│   ├── pom.xml
-│   └── src/
-│       ├── main/
-│       └── test/
+├── sentinel-consumer-service/      # Kafka consumer service
+│   ├── src/main/java/com/sentinel/consumer/
+│   │   └── SentinelConsumerApplication.java    # Consumer service main class
+│   ├── src/main/resources/
+│   │   └── application.yml                     # Service configuration
+│   ├── Dockerfile                              # Container image definition
+│   └── pom.xml                                 # Module dependencies
 │
-├── sentinel-consumer-service/   # Data consumer microservice
-│   ├── pom.xml
-│   └── src/
-│       ├── main/
-│       └── test/
+├── sentinel-common/                # Shared library
+│   ├── src/main/proto/                         # Protobuf definitions (shared schema)
+│   ├── src/main/java/                          # Common utilities and DTOs
+│   └── pom.xml                                 # Common dependencies
 │
-└── sentinel-common/             # Shared DTOs, models, and utilities
-    ├── pom.xml
-    └── src/
-        ├── main/
-        └── test/
+├── docker-compose.yml              # Multi-service orchestration
+├── .pre-commit-config.yaml         # Code quality hooks
+├── .env.example                    # Environment configuration template
+├── mvnw / mvnw.cmd                 # Maven wrapper scripts
+└── pom.xml                         # Parent POM with module definitions
 ```
 
-## Modules
+### Module Overview
 
-### sentinel-ingestion-service
-Microservice responsible for ingesting data and publishing to Kafka.
-- **Port**: 8080
-- **Main Class**: `com.sentinel.ingestion.SentinelIngestionApplication`
-
-### sentinel-consumer-service
-Microservice responsible for consuming data from Kafka and processing it.
-- **Port**: 8081
-- **Main Class**: `com.sentinel.consumer.SentinelConsumerApplication`
-
-### sentinel-common
-Shared library module containing:
-- Common DTOs and data models
-- Protobuf definitions
-- Utility classes
-- Shared validators
-
-## Getting Started
-
-### Prerequisites
-- Java 17 or higher
-- Maven 3.6+
-- Docker and Docker Compose
-
-### Setup
-
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd sentinel-project
-   ```
-
-2. Configure environment variables:
-   ```bash
-   cp .env.example .env
-   # Generate a Kafka cluster ID
-   docker run --rm confluentinc/cp-kafka:7.5.0 kafka-storage random-uuid
-   # Add the generated ID to .env file
-   ```
-
-3. Build all modules:
-   ```bash
-   mvn clean install
-   ```
-
-### Running the Services
-
-#### Option 1: Using Docker Compose
-```bash
-docker-compose up -d
-```
-
-This will start:
-- Kafka (KRaft mode) on port 9092
-- Sentinel Ingestion Service on port 8080
-- Sentinel Consumer Service on port 8081
-
-#### Option 2: Running Locally
-
-1. Start Kafka only:
-   ```bash
-   docker-compose up kafka -d
-   ```
-
-2. Run services individually:
-   ```bash
-   # Terminal 1 - Ingestion Service
-   cd sentinel-ingestion-service
-   mvn spring-boot:run
-
-   # Terminal 2 - Consumer Service
-   cd sentinel-consumer-service
-   mvn spring-boot:run
-   ```
-
-## Development
-
-### Building a Specific Module
-```bash
-mvn clean install -pl sentinel-common
-mvn clean install -pl sentinel-ingestion-service
-mvn clean install -pl sentinel-consumer-service
-```
-
-### Running Tests
-```bash
-# All modules
-mvn test
-
-# Specific module
-mvn test -pl sentinel-ingestion-service
-```
-
-### Code Formatting
-The project uses Spotless with Google Java Format:
-```bash
-# Check formatting
-mvn spotless:check
-
-# Apply formatting
-mvn spotless:apply
-```
+- **`sentinel-ingestion-service`**: A RESTful service responsible for accepting data via HTTP and publishing events to Kafka.
+- **`sentinel-consumer-service`**: A background service that consumes events from Kafka for downstream processing.
+- **`sentinel-common`**: A shared library containing common DTOs, Protobuf definitions, and utility logic used across services.
 
 ## Technology Stack
 
-- **Java**: 17
-- **Spring Boot**: 3.2.1
-- **Apache Kafka**: 7.5.0 (KRaft mode)
-- **Protocol Buffers**: 3.25.1
-- **Maven**: Multi-module project
-- **Lombok**: For reducing boilerplate
-- **Docker**: Container orchestration
+- **Java**: 17 (Eclipse Temurin)
+- **Framework**: Spring Boot 3.2.1
+- **Messaging**: Apache Kafka (KRaft mode)
+- **Serialization**: Google Protocol Buffers (Protobuf)
+- **Build Tool**: Maven
+- **Containerization**: Docker & Docker Compose
 
-## Contributing
+## Prerequisites
 
-1. Make changes in your feature branch
-2. Ensure all tests pass: `mvn test`
-3. Ensure code is formatted: `mvn spotless:apply`
-4. Build the project: `mvn clean install`
-5. Submit a pull request
+- Docker Desktop
+- Java 17 SDK (for local development)
+- Maven (optional, if using the wrapper)
+- Python 3.8+ (for pre-commit hooks, optional but recommended)
 
-## License
+## Getting Started
 
-[Add your license here]
+### 0. Set Up Pre-Commit Hooks (Optional but Recommended)
+
+Pre-commit hooks help maintain code quality by running automated checks before each commit.
+
+Install pre-commit:
+
+```bash
+pip install pre-commit
+```
+
+Install the git hooks:
+
+```bash
+pre-commit install
+```
+
+The hooks will now run automatically on each commit. To run them manually on all files:
+
+```bash
+pre-commit run --all-files
+```
+
+Configured checks include:
+
+- File formatting (trailing whitespace, end-of-file newlines)
+- Dockerfile linting (hadolint)
+- Secrets detection
+- Markdown linting
+- Maven Spotless formatting
+- Maven compilation and tests
+- Docker Compose validation
+
+### 1. Environment Configuration
+
+Before running the stack, you must configure the Kafka Cluster ID. Create a `.env` file from the template:
+
+```bash
+cp .env.example .env
+```
+
+Generate a Kafka cluster ID:
+
+```bash
+docker run --rm confluentinc/cp-kafka:7.5.0 kafka-storage random-uuid
+```
+
+Add the following content to `.env`:
+
+```dotenv
+KAFKA_CLUSTER_ID=<your-generated-id>
+```
+
+### 2. Run with Docker Compose
+
+Build and start the entire stack (Kafka, Ingestion, and Consumer services):
+
+```bash
+docker compose up -d --build
+```
+
+This command will:
+
+1. Compile the Maven project (leveraging Docker layer caching).
+2. Build the Docker images for the services.
+3. Start a single-node Kafka cluster in KRaft mode.
+4. Start the Ingestion and Consumer services.
+
+### 3. Verify Services
+
+Check the status of the containers:
+
+```bash
+docker compose ps
+```
+
+View logs to ensure everything started correctly:
+
+```bash
+docker compose logs -f
+```
+
+## Service Endpoints
+
+| Service               | Port   | Description                           |
+| :-------------------- | :----- | :------------------------------------ |
+| **Ingestion Service** | `8080` | Accepts HTTP requests to ingest data. |
+| **Consumer Service**  | `8081` | Processes Kafka messages.             |
+| **Kafka Broker**      | `9092` | External access to the Kafka cluster. |
+
+## Local Development
+
+### Building the Project
+
+To build the entire multi-module project locally without Docker:
+
+```bash
+./mvnw clean package
+```
+
+This will:
+
+- Compile all three modules ([sentinel-common](sentinel-common/),
+  [sentinel-ingestion-service](sentinel-ingestion-service/), [sentinel-consumer-service](sentinel-consumer-service/))
+- Generate Protobuf classes
+- Run code formatting checks (Spotless)
+- Execute tests
+- Package the applications as executable JARs
+
+### Running Services Individually
+
+To run services locally for development, follow these steps:
+
+#### Step 1: Start Kafka via Docker Compose
+
+First, ensure you have Kafka running. The easiest way is to use the Docker Compose Kafka instance:
+
+```bash
+docker compose up kafka -d
+```
+
+Verify Kafka is running:
+
+```bash
+docker compose ps kafka
+```
+
+#### Step 2: Configure Application Settings
+
+The services use [application.yml](sentinel-consumer-service/src/main/resources/application.yml) files for configuration.
+The Kafka bootstrap server is already configured with a sensible default:
+
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+```
+
+By default, services will connect to `localhost:9092`. If you need to override this:
+
+```bash
+export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+```
+
+#### Step 3: Run Individual Services
+
+Run the **Ingestion Service** (port 8080):
+
+```bash
+mvn spring-boot:run -pl sentinel-ingestion-service
+```
+
+Run the **Consumer Service** (port 8081):
+
+```bash
+mvn spring-boot:run -pl sentinel-consumer-service
+```
+
+Alternatively, you can run the packaged JARs directly:
+
+```bash
+# After running mvn clean package
+java -jar sentinel-ingestion-service/target/sentinel-ingestion-service-1.0.0-SNAPSHOT.jar
+java -jar sentinel-consumer-service/target/sentinel-consumer-service-1.0.0-SNAPSHOT.jar
+```
+
+#### Step 4: Verify Services are Running
+
+Check that the services are responding:
+
+```bash
+# Ingestion Service health check
+curl http://localhost:8080/actuator/health
+
+# Consumer Service health check
+curl http://localhost:8081/actuator/health
+```
+
+### Development Tips
+
+- **Hot Reload**: Both services include Spring Boot DevTools for automatic restart during development.
+- **Logs**: Each service logs to the console. Consumer service uses DEBUG level logging for `com.sentinel.consumer` package.
+- **Shared Module**: Changes to [sentinel-common](sentinel-common/) require rebuilding dependent modules:
+
+  ```bash
+  mvn clean install -pl sentinel-common
+  ```
+
+## Security
+
+The Docker images are configured to run as a non-root user (`sentinel`) for enhanced security.

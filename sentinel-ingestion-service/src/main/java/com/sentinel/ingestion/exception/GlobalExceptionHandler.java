@@ -33,13 +33,15 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(MetricProcessingException.class)
   public ResponseEntity<ErrorResponse> handleMetricProcessingException(
       MetricProcessingException ex) {
-    log.error("Metric processing failed", ex);
+    String errorId = UUID.randomUUID().toString();
+    log.error("Metric processing failed. Error ID: {}", errorId, ex);
     ErrorResponse errorResponse =
         new ErrorResponse(
             HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            "Failed to process metric",
+            "An internal error occurred while processing the metric. Please use this ID for support: "
+                + errorId,
             LocalDateTime.now(),
-            Collections.singletonList(ex.getMessage()));
+            Collections.emptyList());
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
   }
 

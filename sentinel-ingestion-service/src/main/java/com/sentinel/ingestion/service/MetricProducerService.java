@@ -31,7 +31,7 @@ public class MetricProducerService {
     this.dlqTopic = dlqTopic;
   }
 
-  public void sendMetric(MetricRequest request) {
+  public CompletableFuture<SendResult<String, String>> sendMetric(MetricRequest request) {
     try {
       String payload = objectMapper.writeValueAsString(request);
       CompletableFuture<SendResult<String, String>> future =
@@ -56,6 +56,7 @@ public class MetricProducerService {
                 sendToDlq(request.serviceId(), payload);
                 return null;
               });
+      return future;
     } catch (JsonProcessingException e) {
       log.error("Error converting MetricRequest to JSON", e);
       throw new MetricProcessingException("Failed to serialize metric to JSON", e);
