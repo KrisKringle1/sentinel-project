@@ -8,6 +8,48 @@ ingestion from processing.
 
 The project is organized as a Maven multi-module monorepo:
 
+```text
+sentinel-project/
+├── sentinel-ingestion-service/     # HTTP ingestion service
+│   ├── src/main/java/com/sentinel/ingestion/
+│   │   ├── SentinelIngestionServiceApplication.java
+│   │   ├── controller/
+│   │   │   └── MetricsController.java          # REST endpoints for metric ingestion
+│   │   ├── service/
+│   │   │   └── MetricProducerService.java      # Kafka producer logic
+│   │   ├── dto/
+│   │   │   ├── MetricRequest.java              # HTTP request DTOs
+│   │   │   └── ErrorResponse.java              # Error response model
+│   │   └── exception/
+│   │       ├── GlobalExceptionHandler.java     # Centralized error handling
+│   │       └── MetricProcessingException.java
+│   ├── src/main/resources/
+│   │   └── application.yml                     # Service configuration
+│   ├── Dockerfile                              # Container image definition
+│   └── pom.xml                                 # Module dependencies
+│
+├── sentinel-consumer-service/      # Kafka consumer service
+│   ├── src/main/java/com/sentinel/consumer/
+│   │   └── SentinelConsumerApplication.java    # Consumer service main class
+│   ├── src/main/resources/
+│   │   └── application.yml                     # Service configuration
+│   ├── Dockerfile                              # Container image definition
+│   └── pom.xml                                 # Module dependencies
+│
+├── sentinel-common/                # Shared library
+│   ├── src/main/proto/                         # Protobuf definitions (shared schema)
+│   ├── src/main/java/                          # Common utilities and DTOs
+│   └── pom.xml                                 # Common dependencies
+│
+├── docker-compose.yml              # Multi-service orchestration
+├── .pre-commit-config.yaml         # Code quality hooks
+├── .env.example                    # Environment configuration template
+├── mvnw / mvnw.cmd                 # Maven wrapper scripts
+└── pom.xml                         # Parent POM with module definitions
+```
+
+### Module Overview
+
 - **`sentinel-ingestion-service`**: A RESTful service responsible for accepting data via HTTP and publishing events to Kafka.
 - **`sentinel-consumer-service`**: A background service that consumes events from Kafka for downstream processing.
 - **`sentinel-common`**: A shared library containing common DTOs, Protobuf definitions, and utility logic used across services.
