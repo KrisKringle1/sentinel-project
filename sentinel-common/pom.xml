@@ -17,10 +17,11 @@
     <description>Shared DTOs, models, and utilities for Sentinel services</description>
 
     <dependencies>
-        <!-- Protobuf -->
+        <!-- Avro -->
         <dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java</artifactId>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
         </dependency>
 
         <!-- Lombok -->
@@ -62,14 +63,16 @@
                 <artifactId>spotless-maven-plugin</artifactId>
             </plugin>
 
+            <!-- Avro Plugin -->
             <plugin>
-                <groupId>org.xolstice.maven.plugins</groupId>
-                <artifactId>protobuf-maven-plugin</artifactId>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
             </plugin>
 
+            <!-- Build Helper Plugin to add generated sources -->
             <plugin>
-                <groupId>kr.motd.maven</groupId>
-                <artifactId>os-maven-plugin</artifactId>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>

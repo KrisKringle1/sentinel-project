@@ -46,6 +46,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_PROFILES_ACTIVE: docker
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
     depends_on:
       kafka:
         condition: service_healthy
@@ -63,9 +64,27 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_PROFILES_ACTIVE: docker
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
     depends_on:
       kafka:
         condition: service_healthy
+    networks:
+      - sentinel-network
+
+  # Schema Registry Service
+  schema-registry:
+    image: confluentinc/cp-schema-registry:${CONFLUENT_VERSION:-7.5.0}
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8085:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "kafka:29092"
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
     networks:
       - sentinel-network
 

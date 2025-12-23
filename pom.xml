@@ -22,12 +22,14 @@
         <protobuf.version>3.25.1</protobuf.version>
         <protobuf-maven-plugin.version>0.6.1</protobuf-maven-plugin.version>
         <lombok.version>1.18.30</lombok.version>
+        <confluent.version>7.5.0</confluent.version>
+        <avro.version>1.11.3</avro.version>
     </properties>
 
     <modules>
+        <module>sentinel-common</module>
         <module>sentinel-ingestion-service</module>
         <module>sentinel-consumer-service</module>
-        <module>sentinel-common</module>
     </modules>
 
     <dependencyManagement>
@@ -60,6 +62,13 @@
                 <groupId>com.sentinel</groupId>
                 <artifactId>sentinel-common</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+
+            <!-- Kafka Avro Serializer - provides serializers/deserializers for Avro messages in Kafka -->
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-avro-serializer</artifactId>
+                <version>${confluent.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -158,6 +167,40 @@
                             <goals>
                                 <goal>detect</goal>
                             </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.avro</groupId>
+                    <artifactId>avro-maven-plugin</artifactId>
+                    <version>${avro.version}</version>
+                    <executions>
+                        <execution>
+                            <phase>generate-sources</phase>
+                            <goals><goal>schema</goal></goals>
+                            <configuration>
+                                <sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
+                                <outputDirectory>${project.build.directory}/generated-sources/avro</outputDirectory>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <version>3.5.0</version>
+                    <executions>
+                        <execution>
+                            <id>add-source</id>
+                            <phase>generate-sources</phase>
+                            <goals>
+                                <goal>add-source</goal>
+                            </goals>
+                            <configuration>
+                                <sources>
+                                    <source>${project.build.directory}/generated-sources/avro</source>
+                                </sources>
+                            </configuration>
                         </execution>
                     </executions>
                 </plugin>

@@ -33,7 +33,7 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(MetricProcessingException.class)
   public ResponseEntity<ErrorResponse> handleMetricProcessingException(
       MetricProcessingException ex) {
-    String errorId = UUID.randomUUID().toString();
+    String errorId = java.util.UUID.randomUUID().toString();
     log.error("Metric processing failed. Error ID: {}", errorId, ex);
     ErrorResponse errorResponse =
         new ErrorResponse(

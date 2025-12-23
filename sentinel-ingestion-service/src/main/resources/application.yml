@@ -4,11 +4,17 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
+      # Use String for the Key (e.g., Device ID)
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # Use Avro for the Value (The actual metric payload)
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
       acks: all
-      retries: 3
+      retries: 5
       properties:
+        # The URL where your Schema Registry container is listening
+        schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8085}
+        # STAFF LEVEL CONFIG: Idempotence
+        # Ensures that even if the network flickers, we don't send duplicate metrics.
         enable.idempotence: true
 
 server:
