@@ -19,7 +19,7 @@ public class TelemetryController {
   private final TelemetryProducer telemetryProducer;
 
   @PostMapping
-  public ResponseEntity<String> collectTelemetry(@RequestBody TelemetryRequest request) {
+  public ResponseEntity<String> collectTelemetry(@jakarta.validation.Valid @RequestBody TelemetryRequest request) {
     // Staff-Level Mapping: Convert the incoming JSON DTO to our Avro Domain Object
     SystemTelemetry telemetry =
         SystemTelemetry.newBuilder()
