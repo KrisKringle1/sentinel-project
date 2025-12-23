@@ -29,7 +29,7 @@ public class TelemetryProducer {
             log.info(
                 "Sent message=[{}] with offset=[{}]", data, result.getRecordMetadata().offset());
           } else {
-            log.error("Unable to send message=[{}] due to : {}", data, ex.getMessage());
+            log.error("Unable to send message=[{}]", data, ex);
           }
         });
   }
