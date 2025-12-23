@@ -15,8 +15,8 @@ public class TelemetryProducer {
 
   // The Key is a String (System ID), the Value is our Avro object
   private final KafkaTemplate<String, SystemTelemetry> kafkaTemplate;
-  private static final String TOPIC = "system-telemetry";
-
+  @org.springframework.beans.factory.annotation.Value("${sentinel.ingestion.topic.telemetry:system-telemetry}")
+  private String topic;
   public void sendTelemetry(SystemTelemetry data) {
     // We use the systemId as the message key to ensure
     // all data for one machine stays in the same partition (Order Guarantee)
