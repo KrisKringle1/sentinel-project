@@ -12,7 +12,7 @@ spring:
       retries: 5
       properties:
         # The URL where your Schema Registry container is listening
-        schema.registry.url: http://localhost:8085
+        schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8085}
         # STAFF LEVEL CONFIG: Idempotence
         # Ensures that even if the network flickers, we don't send duplicate metrics.
         enable.idempotence: true

@@ -5,6 +5,7 @@ import com.sentinel.ingestion.dto.MetricRequest;
 import com.sentinel.ingestion.exception.MetricProcessingException;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.errors.SerializationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -28,23 +29,27 @@ public class MetricProducerService {
   }
 
   public CompletableFuture<SendResult<String, SentinelMetric>> sendMetric(MetricRequest request) {
+    if (request == null) {
+      throw new MetricProcessingException("MetricRequest cannot be null");
+    }
+
+    if (request.serviceId() == null || request.serviceId().isBlank()) {
+      throw new MetricProcessingException("ServiceId cannot be null or empty");
+    }
+
+    if (request.metricName() == null || request.metricName().isBlank()) {
+      throw new MetricProcessingException("MetricName cannot be null or empty");
+    }
+
+    SentinelMetric metric =
+        SentinelMetric.newBuilder()
+            .setServiceId(request.serviceId())
+            .setMetricName(request.metricName())
+            .setValue(request.value())
+            .setTimestamp(request.timestamp())
+            .build();
+
     try {
-      if (request == null) {
-        throw new MetricProcessingException("MetricRequest cannot be null");
-      }
-
-      if (request.serviceId() == null || request.serviceId().isBlank()) {
-        throw new MetricProcessingException("ServiceId cannot be null or empty");
-      }
-
-      SentinelMetric metric =
-          SentinelMetric.newBuilder()
-              .setServiceId(request.serviceId())
-              .setMetricName(request.metricName())
-              .setValue(request.value())
-              .setTimestamp(request.timestamp())
-              .build();
-
       CompletableFuture<SendResult<String, SentinelMetric>> future =
           kafkaTemplate.send(topic, request.serviceId(), metric);
 
@@ -68,7 +73,10 @@ public class MetricProducerService {
                 return null;
               });
       return future;
-    } catch (Exception e) {
+    } catch (SerializationException e) {
+      log.error("Serialization failed for metric request", e);
+      throw new MetricProcessingException("Failed to serialize metric", e);
+    } catch (RuntimeException e) {
       log.error("Error processing metric request", e);
       throw new MetricProcessingException("Failed to process metric", e);
     }

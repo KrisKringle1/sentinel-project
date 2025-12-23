@@ -4,7 +4,7 @@
   "name": "SentinelMetric",
   "fields": [
     { "name": "serviceId", "type": "string" },
-    { "name": "metricName", "type": ["null", "string"], "default": null },
+    { "name": "metricName", "type": "string" },
     { "name": "value", "type": "double", "default": 0.0 },
     { "name": "timestamp", "type": "long", "default": 0 }
   ]

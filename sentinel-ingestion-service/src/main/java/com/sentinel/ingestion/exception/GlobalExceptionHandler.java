@@ -4,7 +4,6 @@ import com.sentinel.ingestion.dto.ErrorResponse;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -34,7 +33,7 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(MetricProcessingException.class)
   public ResponseEntity<ErrorResponse> handleMetricProcessingException(
       MetricProcessingException ex) {
-    String errorId = UUID.randomUUID().toString();
+    String errorId = java.util.UUID.randomUUID().toString();
     log.error("Metric processing failed. Error ID: {}", errorId, ex);
     ErrorResponse errorResponse =
         new ErrorResponse(
