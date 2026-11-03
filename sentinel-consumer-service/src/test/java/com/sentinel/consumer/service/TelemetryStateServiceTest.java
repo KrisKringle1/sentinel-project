@@ -217,7 +217,9 @@ class TelemetryStateServiceTest {
 
     List<ServiceTelemetrySummary> services = redisBackedService.getAllServices();
 
-    assertThat(services).extracting(ServiceTelemetrySummary::serviceId).contains("local-service", "redis-only");
+    assertThat(services)
+        .extracting(ServiceTelemetrySummary::serviceId)
+        .contains("local-service", "redis-only");
   }
 
   @Test
@@ -229,7 +231,8 @@ class TelemetryStateServiceTest {
     ListOperations<String, String> listOps = mock(ListOperations.class);
     when(redisTemplate.opsForHash()).thenReturn(hashOps);
     when(redisTemplate.opsForList()).thenReturn(listOps);
-    when(hashOps.get(eq(TelemetryStateService.REDIS_SERVICES_HASH_KEY), anyString())).thenReturn(null);
+    when(hashOps.get(eq(TelemetryStateService.REDIS_SERVICES_HASH_KEY), anyString()))
+        .thenReturn(null);
 
     TelemetryStateService redisBackedService =
         new TelemetryStateService(properties, redisTemplate, objectMapper);
@@ -247,7 +250,8 @@ class TelemetryStateServiceTest {
             .timestamp(1000L)
             .build();
 
-    when(listOps.range(TelemetryStateService.REDIS_ALERTS_LIST_KEY, 0, properties.getMaxAlerts() - 1L))
+    when(listOps.range(
+            TelemetryStateService.REDIS_ALERTS_LIST_KEY, 0, properties.getMaxAlerts() - 1L))
         .thenReturn(List.of(objectMapper.writeValueAsString(redisAlert)));
 
     List<AnomalyAlert> alerts = redisBackedService.getAlerts(null, 10);

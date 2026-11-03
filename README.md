@@ -131,6 +131,7 @@ sentinel-project/
 | **Consumer Service**        | `8081` | Exposes `/api/v1/telemetry/*` REST and SSE endpoints.          |
 | **Schema Registry**         | `8085` | Confluent Schema Registry for Apache Avro schemas.             |
 | **Kafka Broker**            | `9092` | External listener for the KRaft Kafka broker.                  |
+| **Redis**                   | `6379` | Durable state store for service summaries, alerts, and DLQ.    |
 
 ### Key Endpoints
 
@@ -237,10 +238,10 @@ To compile all modules, generate Avro sources, verify Spotless formatting, and r
 
 ### Running Services Locally
 
-Start Kafka and Schema Registry via Docker Compose:
+Start Kafka, Schema Registry, and Redis via Docker Compose:
 
 ```bash
-docker compose up kafka schema-registry -d
+docker compose up kafka schema-registry redis -d
 ```
 
 Run the **Ingestion Service** (port 8080):

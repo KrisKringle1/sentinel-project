@@ -134,7 +134,9 @@ public class TelemetryStateService {
             merged.put(serviceId, aggregate.toSummary());
           }
         });
-    return merged.values().stream().sorted(Comparator.comparing(ServiceTelemetrySummary::serviceId)).toList();
+    return merged.values().stream()
+        .sorted(Comparator.comparing(ServiceTelemetrySummary::serviceId))
+        .toList();
   }
 
   public Optional<ServiceTelemetrySummary> getService(String serviceId) {
@@ -231,7 +233,9 @@ public class TelemetryStateService {
         if (value instanceof String json) {
           try {
             PersistedServiceState state = objectMapper.readValue(json, PersistedServiceState.class);
-            result.add(ServiceAggregate.fromPersisted(state, Math.max(1, properties.getWindowSize())).toSummary());
+            result.add(
+                ServiceAggregate.fromPersisted(state, Math.max(1, properties.getWindowSize()))
+                    .toSummary());
           } catch (JsonProcessingException ex) {
             result.add(objectMapper.readValue(json, ServiceTelemetrySummary.class));
           }
@@ -368,7 +372,8 @@ public class TelemetryStateService {
         merged.add(record);
       }
     }
-    merged.sort((left, right) -> Long.compare(right.receivedAtTimestamp(), left.receivedAtTimestamp()));
+    merged.sort(
+        (left, right) -> Long.compare(right.receivedAtTimestamp(), left.receivedAtTimestamp()));
     int maxRecords = Math.max(1, properties.getMaxAlerts());
     return merged.stream().limit(maxRecords).toList();
   }
@@ -384,7 +389,10 @@ public class TelemetryStateService {
   private static String dlqKey(DlqMetricRecord record) {
     return String.format(
         "%s|%s|%d|%d",
-        record.serviceId(), record.metricName(), record.metricTimestamp(), record.receivedAtTimestamp());
+        record.serviceId(),
+        record.metricName(),
+        record.metricTimestamp(),
+        record.receivedAtTimestamp());
   }
 
   private void logRedisFallbackOnce(Exception ex) {
@@ -418,7 +426,8 @@ public class TelemetryStateService {
         for (Map.Entry<String, PersistedMetricState> entry : state.metrics().entrySet()) {
           if (entry.getKey() != null && entry.getValue() != null) {
             aggregate.metrics.put(
-                entry.getKey(), MetricWindow.fromPersisted(entry.getKey(), windowSize, entry.getValue()));
+                entry.getKey(),
+                MetricWindow.fromPersisted(entry.getKey(), windowSize, entry.getValue()));
           }
         }
       }
@@ -566,7 +575,12 @@ public class TelemetryStateService {
 
     private PersistedMetricState toPersistedState() {
       return new PersistedMetricState(
-          count, count == 0 ? 0.0 : min, count == 0 ? 0.0 : max, lastValue, lastUpdated, List.copyOf(window));
+          count,
+          count == 0 ? 0.0 : min,
+          count == 0 ? 0.0 : max,
+          lastValue,
+          lastUpdated,
+          List.copyOf(window));
     }
 
     private static MetricWindow fromPersisted(

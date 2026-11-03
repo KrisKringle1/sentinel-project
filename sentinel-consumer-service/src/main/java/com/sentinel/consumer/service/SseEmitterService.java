@@ -1,6 +1,7 @@
 package com.sentinel.consumer.service;
 
 import com.sentinel.consumer.dto.TelemetryStreamEvent;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -10,7 +11,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -96,7 +96,8 @@ public class SseEmitterService {
       queue.addLast(event);
     }
 
-    private void drainAsync(ExecutorService executorService, java.util.function.Consumer<ClientEmitter> onFailure) {
+    private void drainAsync(
+        ExecutorService executorService, java.util.function.Consumer<ClientEmitter> onFailure) {
       if (!draining.compareAndSet(false, true)) {
         return;
       }
@@ -120,9 +121,11 @@ public class SseEmitterService {
             continue;
           }
 
-          emitter.send(SseEmitter.event().name("telemetry").data(event, MediaType.APPLICATION_JSON));
+          emitter.send(
+              SseEmitter.event().name("telemetry").data(event, MediaType.APPLICATION_JSON));
           if (event.alert() != null) {
-            emitter.send(SseEmitter.event().name("alert").data(event.alert(), MediaType.APPLICATION_JSON));
+            emitter.send(
+                SseEmitter.event().name("alert").data(event.alert(), MediaType.APPLICATION_JSON));
           }
         }
       } catch (Exception ex) {

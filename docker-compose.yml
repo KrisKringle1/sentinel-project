@@ -71,7 +71,7 @@ services:
       kafka:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     networks:
       - sentinel-network
 
@@ -100,6 +100,11 @@ services:
       - "6379:6379"
     networks:
       - sentinel-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   sentinel-network:
