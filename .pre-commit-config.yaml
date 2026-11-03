@@ -10,6 +10,7 @@ repos:
       # Prevent large files from being committed
       - id: check-added-large-files
         args: ["--maxkb=500"]
+        exclude: package-lock\.json$
 
       # Check for files that would conflict in case-insensitive filesystems
       - id: check-case-conflict

@@ -2,7 +2,7 @@ name: Sentinel CI
 
 on:
   push:
-    branches: [ main, master, "milestone-*" ]
+    branches: [ main, master, "milestone-*", "frontend-*" ]
   pull_request:
     branches: [ main, master ]
 
@@ -22,3 +22,25 @@ jobs:
 
       - name: Build and verify with Maven
         run: ./mvnw clean verify -B
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sentinel-dashboard
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck and build Next.js dashboard
+        run: |
+          npm run typecheck
+          npm run build

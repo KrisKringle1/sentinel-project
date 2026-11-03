@@ -109,6 +109,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # Sentinel Next.js Real-Time Dashboard
+  sentinel-dashboard:
+    build:
+      context: ./sentinel-dashboard
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_INGESTION_URL: http://localhost:8080
+        NEXT_PUBLIC_CONSUMER_URL: http://localhost:8081
+    container_name: sentinel-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_INGESTION_URL: http://localhost:8080
+      NEXT_PUBLIC_CONSUMER_URL: http://localhost:8081
+    depends_on:
+      - sentinel-ingestion
+      - sentinel-consumer
+    networks:
+      - sentinel-network
+
 volumes:
   redis-data:
 
