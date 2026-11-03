@@ -1,8 +1,47 @@
 # Sentinel Project
 
-Sentinel is a multi-module microservices platform designed for high-throughput data ingestion and processing.
-It utilizes **Spring Boot 3** and **Apache Kafka** (running in KRaft mode without ZooKeeper) to decouple
-ingestion from processing.
+Sentinel is a distributed microservices telemetry and real-time anomaly detection platform.
+It utilizes **Spring Boot 3**, **Apache Kafka** (KRaft mode without ZooKeeper), **Apache Avro** with
+**Confluent Schema Registry**, and **Redis** (with automatic in-memory fallback) to decouple high-throughput
+metric ingestion from rolling-window aggregation, threshold alerting, and real-time Server-Sent Events (SSE)
+streaming.
+
+## Architecture Overview
+
+```text
+[Microservices / Load Simulator]
+        │
+        │ 1. POST /api/v1/metrics (JSON)
+        ▼
+┌─────────────────────────────────┐
+│ sentinel-ingestion-service:8080 │
+│  - Validates MetricRequest DTO  │
+│  - Serializes to Apache Avro    │◄───► [Confluent Schema Registry :8085]
+│  - Idempotent Kafka Producer    │
+└───────────────┬─────────────────┘
+                │
+                │ 2. Kafka Topic: "service-metrics"
+                │    (Fallback: "service-metrics-dlq")
+                ▼
+      ┌───────────────────┐
+      │ Apache Kafka:9092 │ (KRaft mode — partitioned by serviceId)
+      └─────────┬─────────┘
+                │
+                │ 3. @KafkaListener (Group: sentinel-metrics-consumer)
+                ▼
+┌─────────────────────────────────┐
+│ sentinel-consumer-service:8081  │
+│  - Deserializes Avro records    │
+│  - Rolling window aggregations  │◄───► [Redis :6379] (with in-memory fallback)
+│  - Threshold anomaly detection  │
+└───────┬───────────────┬─────────┘
+        │               │
+        │ 4a. REST API  │ 4b. Server-Sent Events (SSE)
+        ▼               ▼
+   GET /services    GET /stream (Real-time push stream)
+   GET /alerts
+   GET /dlq
+```
 
 ## Project Structure
 
@@ -10,103 +49,150 @@ The project is organized as a Maven multi-module monorepo:
 
 ```text
 sentinel-project/
-├── sentinel-ingestion-service/     # HTTP ingestion service
+├── sentinel-ingestion-service/     # HTTP ingestion & Kafka Avro producer (Port 8080)
 │   ├── src/main/java/com/sentinel/ingestion/
 │   │   ├── SentinelIngestionServiceApplication.java
 │   │   ├── controller/
-│   │   │   └── MetricsController.java          # REST endpoints for metric ingestion
+│   │   │   └── MetricsController.java          # POST /api/v1/metrics
 │   │   ├── service/
-│   │   │   └── MetricProducerService.java      # Kafka producer logic
+│   │   │   └── MetricProducerService.java      # Avro producer + DLQ fallback
 │   │   ├── dto/
-│   │   │   ├── MetricRequest.java              # HTTP request DTOs
-│   │   │   └── ErrorResponse.java              # Error response model
+│   │   │   ├── MetricRequest.java              # Validated request DTO
+│   │   │   └── ErrorResponse.java              # Standardized error model
 │   │   └── exception/
 │   │       ├── GlobalExceptionHandler.java     # Centralized error handling
 │   │       └── MetricProcessingException.java
 │   ├── src/main/resources/
-│   │   └── application.yml                     # Service configuration
-│   ├── Dockerfile                              # Container image definition
-│   └── pom.xml                                 # Module dependencies
+│   │   └── application.yml                     # Producer & Schema Registry config
+│   ├── Dockerfile
+│   └── pom.xml
 │
-├── sentinel-consumer-service/      # Kafka consumer service
+├── sentinel-consumer-service/      # Kafka Avro consumer, anomaly engine & SSE API (Port 8081)
 │   ├── src/main/java/com/sentinel/consumer/
-│   │   └── SentinelConsumerApplication.java    # Consumer service main class
+│   │   ├── SentinelConsumerApplication.java
+│   │   ├── config/
+│   │   │   └── SentinelConsumerProperties.java # Window size & anomaly thresholds
+│   │   ├── controller/
+│   │   │   └── TelemetryController.java        # REST & SSE endpoints (/api/v1/telemetry/*)
+│   │   ├── service/
+│   │   │   ├── MetricConsumerService.java      # @KafkaListener for metrics & DLQ
+│   │   │   ├── TelemetryStateService.java      # Rolling aggregations, alerts & Redis state
+│   │   │   └── SseEmitterService.java          # Live Server-Sent Events broadcaster
+│   │   └── dto/
+│   │       ├── MetricSummary.java
+│   │       ├── ServiceTelemetrySummary.java
+│   │       ├── AnomalyAlert.java
+│   │       ├── DlqMetricRecord.java
+│   │       └── TelemetryStreamEvent.java
 │   ├── src/main/resources/
-│   │   └── application.yml                     # Service configuration
-│   ├── Dockerfile                              # Container image definition
-│   └── pom.xml                                 # Module dependencies
+│   │   └── application.yml                     # Consumer, Avro, Redis & threshold config
+│   ├── Dockerfile
+│   └── pom.xml
 │
-├── sentinel-common/                # Shared library
-│   ├── src/main/proto/                         # Protobuf definitions (shared schema)
-│   ├── src/main/java/                          # Common utilities and DTOs
-│   └── pom.xml                                 # Common dependencies
+├── sentinel-common/                # Shared Avro schemas & generated classes
+│   ├── src/main/avro/
+│   │   └── sentinel.avsc                       # SentinelMetric Avro schema
+│   └── pom.xml
 │
+├── .github/workflows/ci.yml        # GitHub Actions CI pipeline (./mvnw clean verify)
 ├── docker-compose.yml              # Multi-service orchestration
 ├── .pre-commit-config.yaml         # Code quality hooks
 ├── .env.example                    # Environment configuration template
 ├── mvnw / mvnw.cmd                 # Maven wrapper scripts
-└── pom.xml                         # Parent POM with module definitions
+└── pom.xml                         # Parent POM with module & plugin management
 ```
 
 ### Module Overview
 
-- **`sentinel-ingestion-service`**: A RESTful service responsible for accepting data via HTTP and publishing events to Kafka.
-- **`sentinel-consumer-service`**: A background service that consumes events from Kafka for downstream processing.
-- **`sentinel-common`**: A shared library containing common DTOs, Protobuf definitions, and utility logic used across services.
+- **`sentinel-common`**: Shared library containing the Apache Avro schema (`SentinelMetric`) compiled into Java classes
+  during the Maven build.
+- **`sentinel-ingestion-service`**: RESTful ingestion microservice that validates incoming metric payloads and publishes
+  strongly-typed Avro events to Kafka with producer idempotence (`acks=all`, `enable.idempotence=true`) and automatic
+  Dead-Letter Queue (`service-metrics-dlq`) routing.
+- **`sentinel-consumer-service`**: Downstream analytics microservice that consumes Avro events from Kafka, computes
+  per-service rolling window statistics (`count`, `min`, `max`, `movingAverage`), evaluates anomaly thresholds, persists
+  state to Redis (with automatic in-memory fallback), and exposes REST and real-time SSE endpoints.
 
 ## Technology Stack
 
 - **Java**: 17 (Eclipse Temurin)
-- **Framework**: Spring Boot 3.2.1
-- **Messaging**: Apache Kafka (KRaft mode)
-- **Serialization**: Google Protocol Buffers (Protobuf)
-- **Build Tool**: Maven
+- **Framework**: Spring Boot 3.2.1 (Web, Kafka, Data Redis, Validation, Actuator)
+- **Messaging**: Apache Kafka 7.5.0 (KRaft mode)
+- **Serialization & Schema Management**: Apache Avro 1.11.3 & Confluent Schema Registry 7.5.0
+- **State Store**: Redis (with resilient in-memory fallback)
+- **Build & Code Quality**: Maven, Spotless (Google Java Format), JUnit 5, Mockito, Pre-commit
 - **Containerization**: Docker & Docker Compose
+
+## Service Ports & API Reference
+
+| Service                     | Port   | Description                                                    |
+| :-------------------------- | :----- | :------------------------------------------------------------- |
+| **Ingestion Service**       | `8080` | Accepts HTTP `POST /api/v1/metrics` requests.                  |
+| **Consumer Service**        | `8081` | Exposes `/api/v1/telemetry/*` REST and SSE endpoints.          |
+| **Schema Registry**         | `8085` | Confluent Schema Registry for Apache Avro schemas.             |
+| **Kafka Broker**            | `9092` | External listener for the KRaft Kafka broker.                  |
+
+### Key Endpoints
+
+#### 1. Ingest a Metric (`POST http://localhost:8080/api/v1/metrics`)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/metrics \
+  -H "Content-Type: application/json" \
+  -d '{
+    "serviceId": "auth-service",
+    "metricName": "cpu_usage",
+    "value": 94.5,
+    "unit": "percent",
+    "timestamp": 1700000000000
+  }'
+```
+
+#### 2. Query Service Health & Rolling Aggregations (`GET http://localhost:8081/api/v1/telemetry/services`)
+
+```bash
+curl http://localhost:8081/api/v1/telemetry/services
+```
+
+#### 3. Query Recent Anomaly Alerts (`GET http://localhost:8081/api/v1/telemetry/alerts`)
+
+```bash
+curl "http://localhost:8081/api/v1/telemetry/alerts?serviceId=auth-service&limit=20"
+```
+
+#### 4. Subscribe to Real-Time Telemetry SSE Stream (`GET http://localhost:8081/api/v1/telemetry/stream`)
+
+```bash
+curl -N http://localhost:8081/api/v1/telemetry/stream
+```
 
 ## Prerequisites
 
 - Docker Desktop
-- Java 17 SDK (for local development)
-- Maven (optional, if using the wrapper)
+- Java 17+ SDK (for local development)
+- Maven (optional, if using `./mvnw`)
 - Python 3.8+ (for pre-commit hooks, optional but recommended)
 
 ## Getting Started
 
 ### 0. Set Up Pre-Commit Hooks (Optional but Recommended)
 
-Pre-commit hooks help maintain code quality by running automated checks before each commit.
-
-Install pre-commit:
+Install pre-commit and register git hooks:
 
 ```bash
 pip install pre-commit
-```
-
-Install the git hooks:
-
-```bash
 pre-commit install
 ```
 
-The hooks will now run automatically on each commit. To run them manually on all files:
+To run all configured checks manually:
 
 ```bash
 pre-commit run --all-files
 ```
 
-Configured checks include:
-
-- File formatting (trailing whitespace, end-of-file newlines)
-- Dockerfile linting (hadolint)
-- Secrets detection
-- Markdown linting
-- Maven Spotless formatting
-- Maven compilation and tests
-- Docker Compose validation
-
 ### 1. Environment Configuration
 
-Before running the stack, you must configure the Kafka Cluster ID. Create a `.env` file from the template:
+Create a `.env` file from the template:
 
 ```bash
 cp .env.example .env
@@ -118,7 +204,7 @@ Generate a Kafka cluster ID:
 docker run --rm confluentinc/cp-kafka:7.5.0 kafka-storage random-uuid
 ```
 
-Add the following content to `.env`:
+Add the generated ID to `.env`:
 
 ```dotenv
 KAFKA_CLUSTER_ID=<your-generated-id>
@@ -126,139 +212,56 @@ KAFKA_CLUSTER_ID=<your-generated-id>
 
 ### 2. Run with Docker Compose
 
-Build and start the entire stack (Kafka, Ingestion, and Consumer services):
+Build and start the stack (Kafka, Schema Registry, Ingestion, and Consumer services):
 
 ```bash
 docker compose up -d --build
 ```
 
-This command will:
-
-1. Compile the Maven project (leveraging Docker layer caching).
-2. Build the Docker images for the services.
-3. Start a single-node Kafka cluster in KRaft mode.
-4. Start the Ingestion and Consumer services.
-
-### 3. Verify Services
-
-Check the status of the containers:
+Check container status and logs:
 
 ```bash
 docker compose ps
-```
-
-View logs to ensure everything started correctly:
-
-```bash
 docker compose logs -f
 ```
 
-## Service Endpoints
+## Local Development & Testing
 
-| Service               | Port   | Description                           |
-| :-------------------- | :----- | :------------------------------------ |
-| **Ingestion Service** | `8080` | Accepts HTTP requests to ingest data. |
-| **Consumer Service**  | `8081` | Processes Kafka messages.             |
-| **Kafka Broker**      | `9092` | External access to the Kafka cluster. |
+### Building and Running Tests
 
-## Local Development
-
-### Building the Project
-
-To build the entire multi-module project locally without Docker:
+To compile all modules, generate Avro sources, verify Spotless formatting, and run the unit test suite:
 
 ```bash
-./mvnw clean package
+./mvnw clean verify
 ```
 
-This will:
+### Running Services Locally
 
-- Compile all three modules ([sentinel-common](sentinel-common/),
-  [sentinel-ingestion-service](sentinel-ingestion-service/), [sentinel-consumer-service](sentinel-consumer-service/))
-- Generate Protobuf classes
-- Run code formatting checks (Spotless)
-- Execute tests
-- Package the applications as executable JARs
-
-### Running Services Individually
-
-To run services locally for development, follow these steps:
-
-#### Step 1: Start Kafka via Docker Compose
-
-First, ensure you have Kafka running. The easiest way is to use the Docker Compose Kafka instance:
+Start Kafka and Schema Registry via Docker Compose:
 
 ```bash
-docker compose up kafka -d
+docker compose up kafka schema-registry -d
 ```
-
-Verify Kafka is running:
-
-```bash
-docker compose ps kafka
-```
-
-#### Step 2: Configure Application Settings
-
-The services use [application.yml](sentinel-consumer-service/src/main/resources/application.yml) files for configuration.
-The Kafka bootstrap server is already configured with a sensible default:
-
-```yaml
-spring:
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-```
-
-By default, services will connect to `localhost:9092`. If you need to override this:
-
-```bash
-export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-```
-
-#### Step 3: Run Individual Services
 
 Run the **Ingestion Service** (port 8080):
 
 ```bash
-mvn spring-boot:run -pl sentinel-ingestion-service
+./mvnw spring-boot:run -pl sentinel-ingestion-service
 ```
 
 Run the **Consumer Service** (port 8081):
 
 ```bash
-mvn spring-boot:run -pl sentinel-consumer-service
+./mvnw spring-boot:run -pl sentinel-consumer-service
 ```
 
-Alternatively, you can run the packaged JARs directly:
+Verify actuator health checks:
 
 ```bash
-# After running mvn clean package
-java -jar sentinel-ingestion-service/target/sentinel-ingestion-service-1.0.0-SNAPSHOT.jar
-java -jar sentinel-consumer-service/target/sentinel-consumer-service-1.0.0-SNAPSHOT.jar
-```
-
-#### Step 4: Verify Services are Running
-
-Check that the services are responding:
-
-```bash
-# Ingestion Service health check
 curl http://localhost:8080/actuator/health
-
-# Consumer Service health check
 curl http://localhost:8081/actuator/health
 ```
 
-### Development Tips
-
-- **Hot Reload**: Both services include Spring Boot DevTools for automatic restart during development.
-- **Logs**: Each service logs to the console. Consumer service uses DEBUG level logging for `com.sentinel.consumer` package.
-- **Shared Module**: Changes to [sentinel-common](sentinel-common/) require rebuilding dependent modules:
-
-  ```bash
-  mvn clean install -pl sentinel-common
-  ```
-
 ## Security
 
-The Docker images are configured to run as a non-root user (`sentinel`) for enhanced security.
+The Docker images are configured to run as a non-root user (`sentinel`) for enhanced container security.

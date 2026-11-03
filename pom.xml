@@ -32,6 +32,13 @@
         <module>sentinel-consumer-service</module>
     </modules>
 
+    <repositories>
+        <repository>
+            <id>confluent</id>
+            <url>https://packages.confluent.io/maven/</url>
+        </repository>
+    </repositories>
+
     <dependencyManagement>
         <dependencies>
             <!-- Spring Boot Dependencies -->

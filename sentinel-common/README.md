@@ -1,20 +1,16 @@
 # Sentinel Common
 
-Shared library module containing common code used across Sentinel services.
+Shared library module containing common Avro schemas and generated data models used across Sentinel services.
 
 ## Contents
 
-- **DTOs**: Data Transfer Objects shared between services
-- **Models**: Domain models and entities
-- **Protobuf Definitions**: Protocol buffer schemas for serialization
-- **Utilities**: Common utility classes and helpers
-- **Validators**: Custom validation logic
+- **Apache Avro Schema (`src/main/avro/sentinel.avsc`)**: Defines `com.sentinel.common.avro.SentinelMetric` (`serviceId`,
+  `metricName`, `value`, `timestamp`).
+- **Generated Avro Classes**: Automatically generated during the Maven `generate-sources` phase via `avro-maven-plugin`.
 
 ## Usage
 
-This module is automatically included as a dependency in other Sentinel services.
-
-Add to your service's `pom.xml`:
+Add `sentinel-common` to a service's `pom.xml`:
 
 ```xml
 <dependency>

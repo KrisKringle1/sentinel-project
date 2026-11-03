@@ -35,6 +35,18 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- Confluent Kafka Avro Deserializer -->
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+        </dependency>
+
+        <!-- Spring Data Redis -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <!-- Sentinel Common (shared DTOs and logic) -->
         <dependency>
             <groupId>com.sentinel</groupId>
