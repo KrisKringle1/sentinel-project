@@ -13,10 +13,12 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -32,6 +34,7 @@ public class TelemetryStateService {
 
   static final String REDIS_SERVICES_HASH_KEY = "sentinel:telemetry:services";
   static final String REDIS_ALERTS_LIST_KEY = "sentinel:telemetry:alerts";
+  static final String REDIS_DLQ_LIST_KEY = "sentinel:telemetry:dlq";
 
   private final SentinelConsumerProperties properties;
   private final StringRedisTemplate redisTemplate;
@@ -64,14 +67,16 @@ public class TelemetryStateService {
 
     int windowSize = Math.max(1, properties.getWindowSize());
     ServiceAggregate aggregate =
-        serviceAggregates.computeIfAbsent(serviceId, id -> new ServiceAggregate(id, windowSize));
+        serviceAggregates.computeIfAbsent(serviceId, id -> loadAggregateState(id, windowSize));
 
     Optional<AnomalyAlert> maybeAlert;
     ServiceTelemetrySummary summary;
+    PersistedServiceState persistedState;
 
     synchronized (aggregate) {
       maybeAlert = aggregate.record(metricName, value, timestamp, properties.getThresholds());
       summary = aggregate.toSummary();
+      persistedState = aggregate.toPersistedState();
     }
 
     AnomalyAlert triggeredAlert = null;
@@ -81,7 +86,7 @@ public class TelemetryStateService {
       persistAlertToRedis(triggeredAlert);
     }
 
-    persistServiceSummaryToRedis(summary);
+    persistServiceStateToRedis(persistedState);
 
     return TelemetryStreamEvent.builder()
         .eventType(triggeredAlert != null ? "ALERT" : "METRIC")
@@ -114,22 +119,22 @@ public class TelemetryStateService {
     while (dlqRecords.size() > maxRecords) {
       dlqRecords.pollLast();
     }
+    persistDlqRecordToRedis(record);
     return record;
   }
 
   public List<ServiceTelemetrySummary> getAllServices() {
-    if (!serviceAggregates.isEmpty()) {
-      return serviceAggregates.values().stream()
-          .map(
-              agg -> {
-                synchronized (agg) {
-                  return agg.toSummary();
-                }
-              })
-          .sorted(Comparator.comparing(ServiceTelemetrySummary::serviceId))
-          .toList();
+    Map<String, ServiceTelemetrySummary> merged = new LinkedHashMap<>();
+    for (ServiceTelemetrySummary summary : loadServicesFromRedis()) {
+      merged.put(summary.serviceId(), summary);
     }
-    return loadServicesFromRedis();
+    serviceAggregates.forEach(
+        (serviceId, aggregate) -> {
+          synchronized (aggregate) {
+            merged.put(serviceId, aggregate.toSummary());
+          }
+        });
+    return merged.values().stream().sorted(Comparator.comparing(ServiceTelemetrySummary::serviceId)).toList();
   }
 
   public Optional<ServiceTelemetrySummary> getService(String serviceId) {
@@ -144,8 +149,7 @@ public class TelemetryStateService {
 
   public List<AnomalyAlert> getAlerts(String serviceId, int limit) {
     int effectiveLimit = limit > 0 ? limit : properties.getMaxAlerts();
-    List<AnomalyAlert> source =
-        !recentAlerts.isEmpty() ? new ArrayList<>(recentAlerts) : loadAlertsFromRedis();
+    List<AnomalyAlert> source = mergeAlerts();
 
     return source.stream()
         .filter(
@@ -158,7 +162,7 @@ public class TelemetryStateService {
   }
 
   public List<DlqMetricRecord> getDlqRecords() {
-    return List.copyOf(dlqRecords);
+    return mergeDlqRecords();
   }
 
   private void addAlert(AnomalyAlert alert) {
@@ -169,13 +173,19 @@ public class TelemetryStateService {
     }
   }
 
-  private void persistServiceSummaryToRedis(ServiceTelemetrySummary summary) {
+  private ServiceAggregate loadAggregateState(String serviceId, int windowSize) {
+    return loadPersistedServiceStateFromRedis(serviceId)
+        .map(state -> ServiceAggregate.fromPersisted(state, windowSize))
+        .orElseGet(() -> new ServiceAggregate(serviceId, windowSize));
+  }
+
+  private void persistServiceStateToRedis(PersistedServiceState state) {
     if (redisTemplate == null) {
       return;
     }
     try {
-      String json = objectMapper.writeValueAsString(summary);
-      redisTemplate.opsForHash().put(REDIS_SERVICES_HASH_KEY, summary.serviceId(), json);
+      String json = objectMapper.writeValueAsString(state);
+      redisTemplate.opsForHash().put(REDIS_SERVICES_HASH_KEY, state.serviceId(), json);
     } catch (Exception ex) {
       logRedisFallbackOnce(ex);
     }
@@ -194,6 +204,19 @@ public class TelemetryStateService {
     }
   }
 
+  private void persistDlqRecordToRedis(DlqMetricRecord record) {
+    if (redisTemplate == null) {
+      return;
+    }
+    try {
+      String json = objectMapper.writeValueAsString(record);
+      redisTemplate.opsForList().leftPush(REDIS_DLQ_LIST_KEY, json);
+      redisTemplate.opsForList().trim(REDIS_DLQ_LIST_KEY, 0, properties.getMaxAlerts() - 1L);
+    } catch (Exception ex) {
+      logRedisFallbackOnce(ex);
+    }
+  }
+
   private List<ServiceTelemetrySummary> loadServicesFromRedis() {
     if (redisTemplate == null) {
       return List.of();
@@ -206,7 +229,12 @@ public class TelemetryStateService {
       List<ServiceTelemetrySummary> result = new ArrayList<>();
       for (Object value : entries.values()) {
         if (value instanceof String json) {
-          result.add(objectMapper.readValue(json, ServiceTelemetrySummary.class));
+          try {
+            PersistedServiceState state = objectMapper.readValue(json, PersistedServiceState.class);
+            result.add(ServiceAggregate.fromPersisted(state, Math.max(1, properties.getWindowSize())).toSummary());
+          } catch (JsonProcessingException ex) {
+            result.add(objectMapper.readValue(json, ServiceTelemetrySummary.class));
+          }
         }
       }
       result.sort(Comparator.comparing(ServiceTelemetrySummary::serviceId));
@@ -224,7 +252,14 @@ public class TelemetryStateService {
     try {
       Object raw = redisTemplate.opsForHash().get(REDIS_SERVICES_HASH_KEY, serviceId);
       if (raw instanceof String json) {
-        return Optional.of(objectMapper.readValue(json, ServiceTelemetrySummary.class));
+        try {
+          PersistedServiceState state = objectMapper.readValue(json, PersistedServiceState.class);
+          return Optional.of(
+              ServiceAggregate.fromPersisted(state, Math.max(1, properties.getWindowSize()))
+                  .toSummary());
+        } catch (JsonProcessingException ex) {
+          return Optional.of(objectMapper.readValue(json, ServiceTelemetrySummary.class));
+        }
       }
     } catch (Exception ex) {
       logRedisFallbackOnce(ex);
@@ -259,6 +294,99 @@ public class TelemetryStateService {
     }
   }
 
+  private Optional<PersistedServiceState> loadPersistedServiceStateFromRedis(String serviceId) {
+    if (redisTemplate == null) {
+      return Optional.empty();
+    }
+    try {
+      Object raw = redisTemplate.opsForHash().get(REDIS_SERVICES_HASH_KEY, serviceId);
+      if (raw instanceof String json) {
+        try {
+          return Optional.of(objectMapper.readValue(json, PersistedServiceState.class));
+        } catch (JsonProcessingException ex) {
+          return Optional.empty();
+        }
+      }
+    } catch (Exception ex) {
+      logRedisFallbackOnce(ex);
+    }
+    return Optional.empty();
+  }
+
+  private List<DlqMetricRecord> loadDlqRecordsFromRedis() {
+    if (redisTemplate == null) {
+      return List.of();
+    }
+    try {
+      List<String> rawList =
+          redisTemplate.opsForList().range(REDIS_DLQ_LIST_KEY, 0, properties.getMaxAlerts() - 1L);
+      if (rawList == null || rawList.isEmpty()) {
+        return List.of();
+      }
+      List<DlqMetricRecord> records = new ArrayList<>(rawList.size());
+      for (String json : rawList) {
+        try {
+          records.add(objectMapper.readValue(json, DlqMetricRecord.class));
+        } catch (JsonProcessingException ignored) {
+          // Skip malformed entries
+        }
+      }
+      return records;
+    } catch (Exception ex) {
+      logRedisFallbackOnce(ex);
+      return List.of();
+    }
+  }
+
+  private List<AnomalyAlert> mergeAlerts() {
+    List<AnomalyAlert> merged = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    for (AnomalyAlert alert : recentAlerts) {
+      if (seen.add(alertKey(alert))) {
+        merged.add(alert);
+      }
+    }
+    for (AnomalyAlert alert : loadAlertsFromRedis()) {
+      if (seen.add(alertKey(alert))) {
+        merged.add(alert);
+      }
+    }
+    merged.sort((left, right) -> Long.compare(right.timestamp(), left.timestamp()));
+    return merged;
+  }
+
+  private List<DlqMetricRecord> mergeDlqRecords() {
+    List<DlqMetricRecord> merged = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    for (DlqMetricRecord record : dlqRecords) {
+      if (seen.add(dlqKey(record))) {
+        merged.add(record);
+      }
+    }
+    for (DlqMetricRecord record : loadDlqRecordsFromRedis()) {
+      if (seen.add(dlqKey(record))) {
+        merged.add(record);
+      }
+    }
+    merged.sort((left, right) -> Long.compare(right.receivedAtTimestamp(), left.receivedAtTimestamp()));
+    int maxRecords = Math.max(1, properties.getMaxAlerts());
+    return merged.stream().limit(maxRecords).toList();
+  }
+
+  private static String alertKey(AnomalyAlert alert) {
+    if (alert.alertId() != null && !alert.alertId().isBlank()) {
+      return alert.alertId();
+    }
+    return String.format(
+        "%s|%s|%d|%s", alert.serviceId(), alert.metricName(), alert.timestamp(), alert.severity());
+  }
+
+  private static String dlqKey(DlqMetricRecord record) {
+    return String.format(
+        "%s|%s|%d|%d",
+        record.serviceId(), record.metricName(), record.metricTimestamp(), record.receivedAtTimestamp());
+  }
+
   private void logRedisFallbackOnce(Exception ex) {
     if (redisFallbackLogged.compareAndSet(false, true)) {
       log.warn(
@@ -278,6 +406,23 @@ public class TelemetryStateService {
     private ServiceAggregate(String serviceId, int windowSize) {
       this.serviceId = serviceId;
       this.windowSize = windowSize;
+    }
+
+    private static ServiceAggregate fromPersisted(PersistedServiceState state, int windowSize) {
+      ServiceAggregate aggregate = new ServiceAggregate(state.serviceId(), windowSize);
+      aggregate.totalEvents = state.totalEvents();
+      aggregate.anomalyCount = state.anomalyCount();
+      aggregate.lastSeenTimestamp = state.lastSeenTimestamp();
+      aggregate.status = state.status() != null ? state.status() : "HEALTHY";
+      if (state.metrics() != null) {
+        for (Map.Entry<String, PersistedMetricState> entry : state.metrics().entrySet()) {
+          if (entry.getKey() != null && entry.getValue() != null) {
+            aggregate.metrics.put(
+                entry.getKey(), MetricWindow.fromPersisted(entry.getKey(), windowSize, entry.getValue()));
+          }
+        }
+      }
+      return aggregate;
     }
 
     private Optional<AnomalyAlert> record(
@@ -361,6 +506,15 @@ public class TelemetryStateService {
           .metrics(snapshot)
           .build();
     }
+
+    private PersistedServiceState toPersistedState() {
+      Map<String, PersistedMetricState> snapshot = new LinkedHashMap<>();
+      for (Map.Entry<String, MetricWindow> entry : metrics.entrySet()) {
+        snapshot.put(entry.getKey(), entry.getValue().toPersistedState());
+      }
+      return new PersistedServiceState(
+          serviceId, status, totalEvents, anomalyCount, lastSeenTimestamp, snapshot);
+    }
   }
 
   private static final class MetricWindow {
@@ -409,5 +563,59 @@ public class TelemetryStateService {
           .lastUpdated(lastUpdated)
           .build();
     }
+
+    private PersistedMetricState toPersistedState() {
+      return new PersistedMetricState(
+          count, count == 0 ? 0.0 : min, count == 0 ? 0.0 : max, lastValue, lastUpdated, List.copyOf(window));
+    }
+
+    private static MetricWindow fromPersisted(
+        String metricName, int maxWindowSize, PersistedMetricState persistedState) {
+      MetricWindow window = new MetricWindow(metricName, maxWindowSize);
+      window.count = Math.max(0, persistedState.count());
+      if (window.count == 0) {
+        window.min = Double.POSITIVE_INFINITY;
+        window.max = Double.NEGATIVE_INFINITY;
+      } else {
+        window.min = persistedState.min();
+        window.max = persistedState.max();
+      }
+      window.lastValue = persistedState.lastValue();
+      window.lastUpdated = persistedState.lastUpdated();
+      if (persistedState.windowValues() != null) {
+        for (Double value : persistedState.windowValues()) {
+          if (value != null) {
+            window.window.addLast(value);
+            window.windowSum += value;
+          }
+        }
+      }
+      while (window.window.size() > maxWindowSize) {
+        Double removed = window.window.removeFirst();
+        if (removed != null) {
+          window.windowSum -= removed;
+        }
+      }
+      if (!window.window.isEmpty()) {
+        window.lastValue = window.window.peekLast();
+      }
+      return window;
+    }
   }
+
+  private record PersistedServiceState(
+      String serviceId,
+      String status,
+      long totalEvents,
+      long anomalyCount,
+      long lastSeenTimestamp,
+      Map<String, PersistedMetricState> metrics) {}
+
+  private record PersistedMetricState(
+      long count,
+      double min,
+      double max,
+      double lastValue,
+      long lastUpdated,
+      List<Double> windowValues) {}
 }

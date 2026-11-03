@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,7 @@ import com.sentinel.consumer.dto.MetricSummary;
 import com.sentinel.consumer.dto.ServiceTelemetrySummary;
 import com.sentinel.consumer.dto.TelemetryStreamEvent;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.RedisConnectionFailureException;
@@ -141,6 +143,147 @@ class TelemetryStateServiceTest {
 
     assertThatThrownBy(() -> stateService.recordMetric(null))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void shouldHydratePersistedAggregateStateAfterRestart() {
+    StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+    @SuppressWarnings("unchecked")
+    HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
+    @SuppressWarnings("unchecked")
+    ListOperations<String, String> listOps = mock(ListOperations.class);
+    when(redisTemplate.opsForHash()).thenReturn(hashOps);
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+
+    TelemetryStateService firstInstance =
+        new TelemetryStateService(properties, redisTemplate, objectMapper);
+    firstInstance.recordMetric(buildMetric("auth-service", "cpu_usage", 40.0, 1000L));
+    firstInstance.recordMetric(buildMetric("auth-service", "cpu_usage", 80.0, 2000L));
+
+    org.mockito.ArgumentCaptor<String> persistedStateCaptor =
+        org.mockito.ArgumentCaptor.forClass(String.class);
+    verify(hashOps, atLeast(1))
+        .put(
+            eq(TelemetryStateService.REDIS_SERVICES_HASH_KEY),
+            eq("auth-service"),
+            persistedStateCaptor.capture());
+
+    String persistedStateJson =
+        persistedStateCaptor.getAllValues().get(persistedStateCaptor.getAllValues().size() - 1);
+    when(hashOps.get(TelemetryStateService.REDIS_SERVICES_HASH_KEY, "auth-service"))
+        .thenReturn(persistedStateJson);
+
+    TelemetryStateService restartedInstance =
+        new TelemetryStateService(properties, redisTemplate, objectMapper);
+    TelemetryStreamEvent event =
+        restartedInstance.recordMetric(buildMetric("auth-service", "cpu_usage", 60.0, 3000L));
+
+    ServiceTelemetrySummary summary = event.serviceSummary();
+    assertThat(summary.totalEvents()).isEqualTo(3);
+    assertThat(summary.metrics().get("cpu_usage").count()).isEqualTo(3);
+    assertThat(summary.metrics().get("cpu_usage").min()).isEqualTo(40.0);
+    assertThat(summary.metrics().get("cpu_usage").max()).isEqualTo(80.0);
+  }
+
+  @Test
+  void shouldMergeLocalAndRedisServiceSnapshots() throws Exception {
+    StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+    @SuppressWarnings("unchecked")
+    HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
+    @SuppressWarnings("unchecked")
+    ListOperations<String, String> listOps = mock(ListOperations.class);
+    when(redisTemplate.opsForHash()).thenReturn(hashOps);
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+
+    TelemetryStateService redisBackedService =
+        new TelemetryStateService(properties, redisTemplate, objectMapper);
+    redisBackedService.recordMetric(buildMetric("local-service", "cpu_usage", 40.0, 1000L));
+
+    ServiceTelemetrySummary redisOnlySummary =
+        ServiceTelemetrySummary.builder()
+            .serviceId("redis-only")
+            .status("HEALTHY")
+            .totalEvents(2)
+            .anomalyCount(0)
+            .lastSeenTimestamp(900L)
+            .metrics(Map.of())
+            .build();
+
+    when(hashOps.entries(TelemetryStateService.REDIS_SERVICES_HASH_KEY))
+        .thenReturn(
+            Map.of(
+                "redis-only", objectMapper.writeValueAsString(redisOnlySummary),
+                "local-service", objectMapper.writeValueAsString(redisOnlySummary)));
+
+    List<ServiceTelemetrySummary> services = redisBackedService.getAllServices();
+
+    assertThat(services).extracting(ServiceTelemetrySummary::serviceId).contains("local-service", "redis-only");
+  }
+
+  @Test
+  void shouldMergeLocalAndRedisAlertHistory() throws Exception {
+    StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+    @SuppressWarnings("unchecked")
+    HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
+    @SuppressWarnings("unchecked")
+    ListOperations<String, String> listOps = mock(ListOperations.class);
+    when(redisTemplate.opsForHash()).thenReturn(hashOps);
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(hashOps.get(eq(TelemetryStateService.REDIS_SERVICES_HASH_KEY), anyString())).thenReturn(null);
+
+    TelemetryStateService redisBackedService =
+        new TelemetryStateService(properties, redisTemplate, objectMapper);
+    redisBackedService.recordMetric(buildMetric("billing-service", "cpu_usage", 96.0, 2000L));
+
+    AnomalyAlert redisAlert =
+        AnomalyAlert.builder()
+            .alertId("redis-alert-1")
+            .serviceId("orders-service")
+            .metricName("latency_ms")
+            .value(700.0)
+            .threshold(500.0)
+            .severity("CRITICAL")
+            .message("redis alert")
+            .timestamp(1000L)
+            .build();
+
+    when(listOps.range(TelemetryStateService.REDIS_ALERTS_LIST_KEY, 0, properties.getMaxAlerts() - 1L))
+        .thenReturn(List.of(objectMapper.writeValueAsString(redisAlert)));
+
+    List<AnomalyAlert> alerts = redisBackedService.getAlerts(null, 10);
+    assertThat(alerts).extracting(AnomalyAlert::alertId).contains("redis-alert-1");
+    assertThat(alerts).hasSizeGreaterThanOrEqualTo(2);
+  }
+
+  @Test
+  void shouldPersistAndMergeDlqHistoryFromRedis() throws Exception {
+    StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+    @SuppressWarnings("unchecked")
+    HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
+    @SuppressWarnings("unchecked")
+    ListOperations<String, String> listOps = mock(ListOperations.class);
+    when(redisTemplate.opsForHash()).thenReturn(hashOps);
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+
+    TelemetryStateService redisBackedService =
+        new TelemetryStateService(properties, redisTemplate, objectMapper);
+    redisBackedService.recordDlqMetric(buildMetric("local-dlq", "error_rate", 4.0, 2000L));
+
+    DlqMetricRecord redisRecord =
+        DlqMetricRecord.builder()
+            .serviceId("redis-dlq")
+            .metricName("error_rate")
+            .value(5.0)
+            .metricTimestamp(1000L)
+            .receivedAtTimestamp(1001L)
+            .build();
+
+    when(listOps.range(TelemetryStateService.REDIS_DLQ_LIST_KEY, 0, properties.getMaxAlerts() - 1L))
+        .thenReturn(List.of(objectMapper.writeValueAsString(redisRecord)));
+
+    List<DlqMetricRecord> records = redisBackedService.getDlqRecords();
+    assertThat(records).extracting(DlqMetricRecord::serviceId).contains("local-dlq", "redis-dlq");
+    verify(listOps).leftPush(eq(TelemetryStateService.REDIS_DLQ_LIST_KEY), anyString());
   }
 
   private static SentinelMetric buildMetric(
