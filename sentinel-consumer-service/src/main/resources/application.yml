@@ -1,17 +1,24 @@
 spring:
   application:
     name: sentinel-consumer-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: sentinel-metrics-consumer
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
       auto-offset-reset: earliest
       properties:
         # Ensures consumer only reads committed messages. This is a step towards
         # exactly-once semantics and requires a transactional or idempotent producer.
         isolation.level: read_committed
+        schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8085}
+        specific.avro.reader: true
 
 server:
   port: 8081
@@ -20,7 +27,23 @@ logging:
   level:
     com.sentinel.consumer: DEBUG
 
+sentinel:
+  consumer:
+    topic:
+      metrics: service-metrics
+      metrics-dlq: service-metrics-dlq
+    window-size: 50
+    max-alerts: 100
+    thresholds:
+      cpu_usage: 90.0
+      memory_usage: 85.0
+      latency_ms: 500.0
+      error_rate: 5.0
+
 management:
+  health:
+    redis:
+      enabled: false
   endpoints:
     web:
       exposure:

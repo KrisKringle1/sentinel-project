@@ -65,8 +65,12 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_PROFILES_ACTIVE: docker
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       kafka:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - sentinel-network
@@ -87,6 +91,26 @@ services:
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
     networks:
       - sentinel-network
+
+  # Redis for telemetry state persistence
+  redis:
+    image: redis:7-alpine
+    container_name: sentinel-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - sentinel-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis-data:
 
 networks:
   sentinel-network:

@@ -48,7 +48,7 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
-        <!-- Kafka Avro Serializer -->
+        <!-- Confluent Kafka Avro Serializer -->
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-avro-serializer</artifactId>
