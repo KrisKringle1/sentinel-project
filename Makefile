@@ -13,11 +13,17 @@ help: ## Show this help menu
 	@echo ""
 
 env: ## Ensure .env exists with a valid KAFKA_CLUSTER_ID
-	@if [ ! -f .env ] || ! grep -q "^KAFKA_CLUSTER_ID=.\+" .env; then \
+	@if [ ! -f .env ]; then \
 		echo "KAFKA_CLUSTER_ID=$(DEFAULT_KAFKA_CLUSTER_ID)" > .env; \
 		echo "Created .env with KAFKA_CLUSTER_ID=$(DEFAULT_KAFKA_CLUSTER_ID)"; \
-	else \
+	elif grep -q "^KAFKA_CLUSTER_ID=.\+" .env; then \
 		echo ".env already configured."; \
+	elif grep -q "^KAFKA_CLUSTER_ID=" .env; then \
+		sed -i 's/^KAFKA_CLUSTER_ID=.*/KAFKA_CLUSTER_ID=$(DEFAULT_KAFKA_CLUSTER_ID)/' .env; \
+		echo "Updated empty KAFKA_CLUSTER_ID in .env"; \
+	else \
+		echo "KAFKA_CLUSTER_ID=$(DEFAULT_KAFKA_CLUSTER_ID)" >> .env; \
+		echo "Appended KAFKA_CLUSTER_ID=$(DEFAULT_KAFKA_CLUSTER_ID) to .env"; \
 	fi
 
 start: up ## Alias for 'make up' — build and start the entire platform
