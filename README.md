@@ -1,10 +1,64 @@
 # Sentinel Project
 
-Sentinel is a distributed microservices telemetry and real-time anomaly detection platform.
-It utilizes **Spring Boot 3**, **Apache Kafka** (KRaft mode without ZooKeeper), **Apache Avro** with
-**Confluent Schema Registry**, and **Redis** (with automatic in-memory fallback) to decouple high-throughput
-metric ingestion from rolling-window aggregation, threshold alerting, and real-time Server-Sent Events (SSE)
-streaming.
+**Sentinel is a real-time health monitor for a fleet of microservices.** Each service reports operational
+metrics such as CPU usage, memory usage, latency, and error rate. Sentinel keeps a rolling statistical picture of
+every service, raises an alert as soon as a metric crosses a threshold, and pushes live updates to a web
+dashboard. You can see which service is degrading, and on which metric, within seconds.
+
+It's built with **Spring Boot 3**, **Apache Kafka** (KRaft mode), **Apache Avro** + **Confluent Schema Registry**,
+**Redis**, and a **Next.js** dashboard.
+
+## What It Does
+
+1. **Collects metrics over HTTP.** Any service, or the built-in traffic simulator, sends a small JSON payload
+   (`serviceId`, `metricName`, `value`, `timestamp`) to the ingestion API.
+2. **Buffers them durably in Kafka.** The ingestion service validates each payload, serializes it to Avro
+   against a schema registered in Schema Registry, and publishes it to Kafka. Messages are keyed by `serviceId`,
+   so each service's readings stay in order. If a publish fails, the event goes to a dead-letter topic
+   (`service-metrics-dlq`) so it isn't lost.
+3. **Aggregates per service.** The consumer service keeps a rolling window (by default the last 50 readings) for
+   every service/metric pair. From that window it tracks the count, min, max, moving average, and latest value.
+4. **Detects anomalies.** Each reading is checked against a configurable threshold. A breach produces an alert
+   whose severity depends on how far over the threshold the value is. Each service also gets an overall status
+   (`HEALTHY`, `WARNING`, or `CRITICAL`) based on its latest readings.
+5. **Streams results live.** Every metric and alert is pushed to connected clients over Server-Sent Events (SSE).
+   REST endpoints return the current fleet snapshot, recent alerts, and dead-lettered records.
+6. **Survives restarts.** Service state, alerts, and DLQ records are saved to Redis. If Redis is unreachable,
+   Sentinel switches to in-memory state and keeps running.
+
+### Anomaly Rules
+
+| Metric         | Default Threshold | `WARNING` when…        | `CRITICAL` when…                        |
+| :------------- | :---------------- | :--------------------- | :-------------------------------------- |
+| `cpu_usage`    | 90 %              | value > 90             | value ≥ 95 (or ≥ 15 % over threshold)   |
+| `memory_usage` | 85 %              | value > 85             | value ≥ 95 (or ≥ 15 % over threshold)   |
+| `latency_ms`   | 500 ms            | value > 500            | value ≥ 575 (15 % over threshold)       |
+| `error_rate`   | 5 %               | value > 5              | value ≥ 5.75 (15 % over threshold)      |
+
+You can change the thresholds and window size under `sentinel.consumer` in
+`sentinel-consumer-service/src/main/resources/application.yml`.
+
+### The Dashboard
+
+The Sentinel Dashboard (`http://localhost:3000`) is the main way to watch the system:
+
+- **Fleet health grid**: one card per service, showing its status and rolling stats for each metric.
+- **Live telemetry chart**: metric values streaming in real time over SSE.
+- **Anomaly alert feed**: alerts as they fire, color-coded by severity.
+- **Traffic & anomaly simulator**: lets you try the platform without real services. It can:
+  - Generate continuous traffic at 1, 2, or 5 metrics per second (about 12 % of readings spike above a threshold)
+  - Inject a scenario with one click (CPU spike, latency surge, heap pressure, 5xx error burst)
+  - Reset every service to healthy baseline values
+  - Send a single custom metric
+
+### Example: The Life of a Metric
+
+Suppose `auth-service` reports `cpu_usage = 96.4`:
+
+1. The ingestion service validates it and publishes an Avro record to the `service-metrics` topic.
+2. The consumer service adds it to `auth-service`'s rolling CPU window and finds it is over the 90 % threshold.
+3. It creates a `CRITICAL` alert, marks `auth-service` as `CRITICAL`, and saves both to Redis.
+4. The dashboard receives the SSE event, turns the `auth-service` card red, and adds the alert to the feed.
 
 ## Architecture Overview
 
