@@ -133,7 +133,7 @@ export function TrafficSimulatorPanel({
     (payload: MetricRequestPayload, label?: string) => {
       ingestMutation.mutate({ payload, label });
     },
-    [ingestMutation]
+    [ingestMutation.mutate]
   );
 
   // Continuous background load generator
