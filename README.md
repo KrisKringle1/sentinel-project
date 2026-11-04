@@ -9,7 +9,7 @@ streaming.
 ## Architecture Overview
 
 ```text
-[Microservices / Load Simulator]
+[Microservices / Sentinel Dashboard Load Simulator (:3000)]
         │
         │ 1. POST /api/v1/metrics (JSON)
         ▼
@@ -38,9 +38,13 @@ streaming.
         │               │
         │ 4a. REST API  │ 4b. Server-Sent Events (SSE)
         ▼               ▼
-   GET /services    GET /stream (Real-time push stream)
-   GET /alerts
-   GET /dlq
+┌─────────────────────────────────┐
+│ sentinel-dashboard:3000         │
+│  - Next.js 14 + Mantine v7 UI   │
+│  - TanStack React Query + SSE   │
+│  - Fleet Health & Alert Feed    │
+│  - Chaos & Traffic Simulator    │
+└─────────────────────────────────┘
 ```
 
 ## Project Structure
@@ -94,7 +98,21 @@ sentinel-project/
 │   │   └── sentinel.avsc                       # SentinelMetric Avro schema
 │   └── pom.xml
 │
-├── .github/workflows/ci.yml        # GitHub Actions CI pipeline (./mvnw clean verify)
+├── sentinel-dashboard/             # Next.js 14 + TypeScript + Tailwind real-time UI (Port 3000)
+│   ├── src/
+│   │   ├── app/                                # Next.js App Router layout & dashboard page
+│   │   ├── components/                         # Live charts, fleet grid, alert feed & traffic simulator
+│   │   ├── hooks/
+│   │   │   └── useTelemetryStream.ts           # SSE EventSource & REST state hydration hook
+│   │   ├── lib/
+│   │   │   └── api.ts                          # Typed client for Ingestion (:8080) & Consumer (:8081)
+│   │   └── types/
+│   │       └── telemetry.ts                    # TypeScript interfaces matching backend DTOs
+│   ├── Dockerfile
+│   └── package.json
+│
+├── .github/workflows/ci.yml        # GitHub Actions CI pipeline (Maven + Next.js build)
+├── Makefile                        # One-command full-stack orchestration & dev targets
 ├── docker-compose.yml              # Multi-service orchestration
 ├── .pre-commit-config.yaml         # Code quality hooks
 ├── .env.example                    # Environment configuration template
@@ -127,6 +145,7 @@ sentinel-project/
 
 | Service                     | Port   | Description                                                    |
 | :-------------------------- | :----- | :------------------------------------------------------------- |
+| **Sentinel Dashboard**      | `3000` | Next.js real-time SSE telemetry UI & traffic/chaos simulator.  |
 | **Ingestion Service**       | `8080` | Accepts HTTP `POST /api/v1/metrics` requests.                  |
 | **Consumer Service**        | `8081` | Exposes `/api/v1/telemetry/*` REST and SSE endpoints.          |
 | **Schema Registry**         | `8085` | Confluent Schema Registry for Apache Avro schemas.             |
@@ -175,6 +194,20 @@ curl -N http://localhost:8081/api/v1/telemetry/stream
 - Python 3.8+ (for pre-commit hooks, optional but recommended)
 
 ## Getting Started
+
+### Quick Start (One Command via Makefile)
+
+To automatically configure `.env` (with a valid KRaft `KAFKA_CLUSTER_ID`) and build + launch the entire 6-container platform (Kafka, Schema Registry, Redis, Ingestion, Consumer, and the Next.js Dashboard):
+
+```bash
+make start
+```
+
+View all available `Makefile` commands at any time:
+
+```bash
+make help
+```
 
 ### 0. Set Up Pre-Commit Hooks (Optional but Recommended)
 
@@ -254,6 +287,14 @@ Run the **Consumer Service** (port 8081):
 
 ```bash
 ./mvnw spring-boot:run -pl sentinel-consumer-service
+```
+
+Run the **Sentinel Dashboard** (port 3000):
+
+```bash
+cd sentinel-dashboard
+npm install
+npm run dev
 ```
 
 Verify actuator health checks:

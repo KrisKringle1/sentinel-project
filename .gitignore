@@ -62,3 +62,9 @@ spring-boot-devtools.properties
 *.jar
 *.war
 *.ear
+
+# Frontend (Next.js / Node)
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo

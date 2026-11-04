@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--mantine-color-dark-8);
+  color: var(--mantine-color-dark-0);
+  min-height: 100vh;
+}
