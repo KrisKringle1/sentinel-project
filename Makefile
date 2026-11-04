@@ -19,8 +19,7 @@ env: ## Ensure .env exists with a valid KAFKA_CLUSTER_ID
 	elif grep -q "^KAFKA_CLUSTER_ID=.\+" .env; then \
 		echo ".env already configured."; \
 	elif grep -q "^KAFKA_CLUSTER_ID=" .env; then \
-		grep -v "^KAFKA_CLUSTER_ID=" .env > .env.tmp && mv .env.tmp .env; \
-		echo "KAFKA_CLUSTER_ID=$(DEFAULT_KAFKA_CLUSTER_ID)" >> .env; \
+		sed 's/^KAFKA_CLUSTER_ID=.*/KAFKA_CLUSTER_ID=$(DEFAULT_KAFKA_CLUSTER_ID)/' .env > .env.tmp && mv .env.tmp .env; \
 		echo "Updated empty KAFKA_CLUSTER_ID in .env"; \
 	else \
 		echo "KAFKA_CLUSTER_ID=$(DEFAULT_KAFKA_CLUSTER_ID)" >> .env; \

@@ -209,7 +209,7 @@ public class TelemetryStateService {
     try {
       String json = objectMapper.writeValueAsString(item);
       redisTemplate.opsForList().leftPush(key, json);
-      redisTemplate.opsForList().trim(key, 0, properties.getMaxAlerts() - 1L);
+      redisTemplate.opsForList().trim(key, 0, Math.max(1, properties.getMaxAlerts()) - 1L);
     } catch (Exception ex) {
       logRedisFallbackOnce(ex);
     }
@@ -289,14 +289,17 @@ public class TelemetryStateService {
     }
     try {
       List<String> rawList =
-          redisTemplate.opsForList().range(key, 0, properties.getMaxAlerts() - 1L);
+          redisTemplate.opsForList().range(key, 0, Math.max(1, properties.getMaxAlerts()) - 1L);
       if (rawList == null || rawList.isEmpty()) {
         return List.of();
       }
       List<T> items = new ArrayList<>(rawList.size());
       for (String json : rawList) {
         try {
-          items.add(objectMapper.readValue(json, type));
+          T item = objectMapper.readValue(json, type);
+          if (item != null) {
+            items.add(item);
+          }
         } catch (JsonProcessingException ignored) {
           // Skip malformed entries
         }
