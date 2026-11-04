@@ -52,18 +52,23 @@ test("SIMULATED_SERVICES contains non-empty unique service identifiers", () => {
 });
 
 test("API URL helpers resolve default ingestion, consumer, alerts, and SSE endpoints", () => {
-  assert.equal(INGESTION_BASE_URL, "http://localhost:8080");
-  assert.equal(CONSUMER_BASE_URL, "http://localhost:8081");
+  const expectedIngestionBase =
+    process.env.NEXT_PUBLIC_INGESTION_URL || "http://localhost:8080";
+  const expectedConsumerBase =
+    process.env.NEXT_PUBLIC_CONSUMER_URL || "http://localhost:8081";
+
+  assert.equal(INGESTION_BASE_URL, expectedIngestionBase);
+  assert.equal(CONSUMER_BASE_URL, expectedConsumerBase);
   assert.equal(
     getTelemetryStreamUrl(),
-    "http://localhost:8081/api/v1/telemetry/stream"
+    `${expectedConsumerBase}/api/v1/telemetry/stream`
   );
   assert.equal(
     buildAlertsUrl(undefined, 100),
-    "http://localhost:8081/api/v1/telemetry/alerts?limit=100"
+    `${expectedConsumerBase}/api/v1/telemetry/alerts?limit=100`
   );
   assert.equal(
     buildAlertsUrl("auth-service", 25),
-    "http://localhost:8081/api/v1/telemetry/alerts?limit=25&serviceId=auth-service"
+    `${expectedConsumerBase}/api/v1/telemetry/alerts?limit=25&serviceId=auth-service`
   );
 });

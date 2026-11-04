@@ -27,7 +27,10 @@ public class SseEmitterService {
   private final ExecutorService broadcasterExecutor = Executors.newCachedThreadPool();
 
   public SseEmitter createEmitter() {
-    SseEmitter emitter = new SseEmitter(DEFAULT_SSE_TIMEOUT_MS);
+    return registerEmitter(new SseEmitter(DEFAULT_SSE_TIMEOUT_MS));
+  }
+
+  SseEmitter registerEmitter(SseEmitter emitter) {
     ClientEmitter client = new ClientEmitter(emitter);
     emitters.add(client);
 

@@ -92,7 +92,7 @@ repos:
       # Run Maven compile and unit tests on push
       - id: maven-test
         name: Maven Compile and Unit Tests
-        entry: ./mvnw test-compile surefire:test
+        entry: ./mvnw test
         language: system
         pass_filenames: false
         files: '\.(java|xml)$|src/'
@@ -121,6 +121,7 @@ repos:
         language: system
         pass_filenames: false
         files: '^sentinel-dashboard/src/.*\.(ts|tsx)$'
+        stages: [push]
 
   # Docker Compose validation
   - repo: local
