@@ -98,7 +98,7 @@ sentinel-project/
 │   │   └── sentinel.avsc                       # SentinelMetric Avro schema
 │   └── pom.xml
 │
-├── sentinel-dashboard/             # Next.js 14 + TypeScript + Tailwind real-time UI (Port 3000)
+├── sentinel-dashboard/             # Next.js 14 + TypeScript + Mantine v7 real-time UI (Port 3000)
 │   ├── src/
 │   │   ├── app/                                # Next.js App Router layout & dashboard page
 │   │   ├── components/                         # Live charts, fleet grid, alert feed & traffic simulator

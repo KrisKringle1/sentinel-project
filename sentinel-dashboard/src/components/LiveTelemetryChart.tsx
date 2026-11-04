@@ -237,7 +237,12 @@ export function LiveTelemetryChart({ timeSeries }: LiveTelemetryChartProps) {
         >
           <svg
             viewBox={`0 0 ${width} ${height}`}
-            className="w-full h-56 select-none"
+            style={{
+              width: "100%",
+              height: 224,
+              userSelect: "none",
+              display: "block",
+            }}
             role="img"
             aria-label={`Live ${meta.label} telemetry chart`}
           >

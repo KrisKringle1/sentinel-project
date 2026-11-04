@@ -123,10 +123,6 @@ public class SseEmitterService {
 
           emitter.send(
               SseEmitter.event().name("telemetry").data(event, MediaType.APPLICATION_JSON));
-          if (event.alert() != null) {
-            emitter.send(
-                SseEmitter.event().name("alert").data(event.alert(), MediaType.APPLICATION_JSON));
-          }
         }
       } catch (Exception ex) {
         log.debug("Removing disconnected SSE client", ex);

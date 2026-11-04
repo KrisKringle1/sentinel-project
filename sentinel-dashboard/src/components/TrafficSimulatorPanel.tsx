@@ -129,11 +129,13 @@ export function TrafficSimulatorPanel({
     },
   });
 
+  const { mutate: mutateIngest, isPending: isIngestPending } = ingestMutation;
+
   const sendSinglePayload = useCallback(
     (payload: MetricRequestPayload, label?: string) => {
-      ingestMutation.mutate({ payload, label });
+      mutateIngest({ payload, label });
     },
-    [ingestMutation.mutate]
+    [mutateIngest]
   );
 
   // Continuous background load generator
@@ -213,7 +215,7 @@ export function TrafficSimulatorPanel({
     });
   };
 
-  const isBusy = ingestMutation.isPending || recoverFleetMutation.isPending;
+  const isBusy = isIngestPending || recoverFleetMutation.isPending;
 
   const chaosButtons = [
     {
@@ -425,7 +427,7 @@ export function TrafficSimulatorPanel({
                 type="submit"
                 size="xs"
                 color="indigo"
-                loading={ingestMutation.isPending}
+                loading={isIngestPending}
                 leftSection={<Send size={13} />}
               >
                 Send Metric

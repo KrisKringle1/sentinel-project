@@ -227,27 +227,6 @@ export function useTelemetryStream(): UseTelemetryStreamResult {
         }
       });
 
-      es.addEventListener("alert", (rawEvent: MessageEvent) => {
-        if (isUnmounted) return;
-        try {
-          const incomingAlert: AnomalyAlert = JSON.parse(rawEvent.data);
-          queryClient.setQueryData<AnomalyAlert[]>(
-            TELEMETRY_QUERY_KEYS.alerts,
-            (oldAlerts = []) => {
-              if (oldAlerts.some((a) => a.alertId === incomingAlert.alertId)) {
-                return oldAlerts;
-              }
-              return [incomingAlert, ...oldAlerts].slice(
-                0,
-                MAX_ALERTS_IN_FEED
-              );
-            }
-          );
-        } catch {
-          // Ignore malformed alert frames
-        }
-      });
-
       es.onerror = () => {
         if (isUnmounted) return;
         setConnectionState("RECONNECTING");
