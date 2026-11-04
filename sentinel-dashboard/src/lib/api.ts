@@ -3,7 +3,7 @@ import {
   DlqMetricRecord,
   MetricRequestPayload,
   ServiceTelemetrySummary,
-} from "@/types/telemetry";
+} from "../types/telemetry";
 
 export const INGESTION_BASE_URL =
   process.env.NEXT_PUBLIC_INGESTION_URL || "http://localhost:8080";
@@ -13,6 +13,14 @@ export const CONSUMER_BASE_URL =
 
 export function getTelemetryStreamUrl(): string {
   return `${CONSUMER_BASE_URL}/api/v1/telemetry/stream`;
+}
+
+export function buildAlertsUrl(serviceId?: string, limit = 50): string {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (serviceId) {
+    params.set("serviceId", serviceId);
+  }
+  return `${CONSUMER_BASE_URL}/api/v1/telemetry/alerts?${params.toString()}`;
 }
 
 export async function fetchServices(): Promise<ServiceTelemetrySummary[]> {
@@ -29,16 +37,9 @@ export async function fetchAlerts(
   serviceId?: string,
   limit = 50
 ): Promise<AnomalyAlert[]> {
-  const params = new URLSearchParams({ limit: String(limit) });
-  if (serviceId) {
-    params.set("serviceId", serviceId);
-  }
-  const response = await fetch(
-    `${CONSUMER_BASE_URL}/api/v1/telemetry/alerts?${params.toString()}`,
-    {
-      cache: "no-store",
-    }
-  );
+  const response = await fetch(buildAlertsUrl(serviceId, limit), {
+    cache: "no-store",
+  });
   if (!response.ok) {
     throw new Error(`Failed to fetch alerts: HTTP ${response.status}`);
   }

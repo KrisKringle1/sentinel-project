@@ -89,13 +89,38 @@ repos:
         pass_filenames: false
         files: 'pom\.xml$'
 
-      # Run Maven compile to catch compilation errors
-      - id: maven-compile
-        name: Maven Compile
-        entry: ./mvnw clean compile -DskipTests
+      # Run Maven compile and unit tests on push
+      - id: maven-test
+        name: Maven Compile and Unit Tests
+        entry: ./mvnw test
         language: system
         pass_filenames: false
         files: '\.(java|xml)$|src/'
+        stages: [push]
+
+  # Frontend Dashboard checks
+  - repo: local
+    hooks:
+      - id: dashboard-typecheck
+        name: Dashboard TypeScript Check
+        entry: npm --prefix sentinel-dashboard run typecheck
+        language: system
+        pass_filenames: false
+        files: '^sentinel-dashboard/.*\.(ts|tsx|json)$'
+
+      - id: dashboard-lint
+        name: Dashboard ESLint Check
+        entry: npm --prefix sentinel-dashboard run lint
+        language: system
+        pass_filenames: false
+        files: '^sentinel-dashboard/.*\.(ts|tsx)$'
+
+      - id: dashboard-test
+        name: Dashboard Unit Tests
+        entry: npm --prefix sentinel-dashboard run test
+        language: system
+        pass_filenames: false
+        files: '^sentinel-dashboard/src/.*\.(ts|tsx)$'
         stages: [push]
 
   # Docker Compose validation
@@ -103,7 +128,7 @@ repos:
     hooks:
       - id: docker-compose-check
         name: Docker Compose Config Check
-        entry: bash -c 'docker compose config > /dev/null'
+        entry: bash -c 'KAFKA_CLUSTER_ID=precommit-test docker compose config > /dev/null'
         language: system
         files: '^docker-compose\.yml$'
         pass_filenames: false
