@@ -7,8 +7,9 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "lint": "next lint --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc --esModuleInterop --module commonjs --moduleResolution node --target es2022 --outDir .test-dist src/types/telemetry.ts src/lib/api.ts src/__tests__/telemetry.test.ts && node --test .test-dist/__tests__/telemetry.test.js && rm -rf .test-dist"
   },
   "dependencies": {
     "@mantine/core": "^7.13.5",

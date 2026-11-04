@@ -1,6 +1,7 @@
 package com.sentinel.consumer.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.sentinel.consumer.dto.AnomalyAlert;
 import com.sentinel.consumer.dto.TelemetryStreamEvent;
@@ -24,32 +25,51 @@ class SseEmitterServiceTest {
   }
 
   @Test
-  void shouldRegisterAndBroadcastAsyncWithoutBlockingCaller() {
-    SseEmitter emitter = sseEmitterService.createEmitter();
-    assertThat(emitter).isNotNull();
-    assertThat(sseEmitterService.getActiveClientCount()).isEqualTo(1);
+  void shouldTrackMultipleClientsAndHandleBurstBroadcastWithoutThrowing() {
+    SseEmitter firstEmitter = sseEmitterService.createEmitter();
+    SseEmitter secondEmitter = sseEmitterService.createEmitter();
 
-    TelemetryStreamEvent event =
-        TelemetryStreamEvent.builder()
-            .eventType("ALERT")
-            .serviceId("auth-service")
-            .metricName("cpu_usage")
-            .value(96.0)
-            .timestamp(1000L)
-            .alert(
-                AnomalyAlert.builder()
-                    .alertId("a-1")
-                    .serviceId("auth-service")
-                    .metricName("cpu_usage")
-                    .value(96.0)
-                    .threshold(90.0)
-                    .severity("CRITICAL")
-                    .message("CPU high")
-                    .timestamp(1000L)
-                    .build())
-            .build();
+    assertThat(firstEmitter).isNotNull();
+    assertThat(secondEmitter).isNotNull();
+    assertThat(sseEmitterService.getActiveClientCount()).isEqualTo(2);
 
-    sseEmitterService.broadcast(event);
-    assertThat(sseEmitterService.getActiveClientCount()).isGreaterThanOrEqualTo(0);
+    // Broadcast a burst exceeding MAX_PENDING_EVENTS_PER_CLIENT (100) to verify bounded queue
+    // safety
+    assertThatCode(
+            () -> {
+              for (int i = 0; i < 125; i++) {
+                sseEmitterService.broadcast(buildSampleEvent(i));
+              }
+            })
+        .doesNotThrowAnyException();
+  }
+
+  @Test
+  void shouldNoOpGracefullyWhenBroadcastingWithZeroClients() {
+    assertThat(sseEmitterService.getActiveClientCount()).isZero();
+    assertThatCode(() -> sseEmitterService.broadcast(buildSampleEvent(1)))
+        .doesNotThrowAnyException();
+    assertThat(sseEmitterService.getActiveClientCount()).isZero();
+  }
+
+  private static TelemetryStreamEvent buildSampleEvent(int seq) {
+    return TelemetryStreamEvent.builder()
+        .eventType("ALERT")
+        .serviceId("auth-service")
+        .metricName("cpu_usage")
+        .value(96.0)
+        .timestamp(1000L + seq)
+        .alert(
+            AnomalyAlert.builder()
+                .alertId("a-" + seq)
+                .serviceId("auth-service")
+                .metricName("cpu_usage")
+                .value(96.0)
+                .threshold(90.0)
+                .severity("CRITICAL")
+                .message("CPU high")
+                .timestamp(1000L + seq)
+                .build())
+        .build();
   }
 }

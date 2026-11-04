@@ -80,14 +80,15 @@ build: ## Build backend JARs and Next.js production bundle
 
 test: verify ## Run all backend unit tests and frontend typecheck/lint
 
-verify: ## Run Maven verify (Spotless + JUnit) and Frontend typecheck + ESLint
+verify: ## Run Maven verify (Spotless + JUnit) and Frontend typecheck + ESLint + tests
 	./mvnw clean verify
 	npm --prefix sentinel-dashboard run typecheck
 	npm --prefix sentinel-dashboard run lint
+	npm --prefix sentinel-dashboard run test
 
 format: ## Auto-format Java source files with Spotless
 	./mvnw spotless:apply
 
 clean: ## Clean Maven target directories and Next.js build cache
 	./mvnw clean
-	rm -rf sentinel-dashboard/.next sentinel-dashboard/tsconfig.tsbuildinfo
+	rm -rf sentinel-dashboard/.next sentinel-dashboard/.test-dist sentinel-dashboard/tsconfig.tsbuildinfo
