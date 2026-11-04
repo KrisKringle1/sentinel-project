@@ -19,8 +19,6 @@
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.2.1</spring-boot.version>
-        <protobuf.version>3.25.1</protobuf.version>
-        <protobuf-maven-plugin.version>0.6.1</protobuf-maven-plugin.version>
         <lombok.version>1.18.30</lombok.version>
         <confluent.version>7.5.0</confluent.version>
         <avro.version>1.11.3</avro.version>
@@ -48,13 +46,6 @@
                 <version>${spring-boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
-            </dependency>
-
-            <!-- Protobuf -->
-            <dependency>
-                <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java</artifactId>
-                <version>${protobuf.version}</version>
             </dependency>
 
             <!-- Lombok -->
@@ -142,41 +133,6 @@
                     </configuration>
                 </plugin>
 
-                <!-- Protobuf Maven Plugin -->
-                <plugin>
-                    <groupId>org.xolstice.maven.plugins</groupId>
-                    <artifactId>protobuf-maven-plugin</artifactId>
-                    <version>${protobuf-maven-plugin.version}</version>
-                    <configuration>
-                        <protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
-                        <protoSourceRoot>${project.basedir}/src/main/proto</protoSourceRoot>
-                        <outputDirectory>${project.build.directory}/generated-sources/protobuf/java</outputDirectory>
-                        <clearOutputDirectory>false</clearOutputDirectory>
-                    </configuration>
-                    <executions>
-                        <execution>
-                            <goals>
-                                <goal>compile</goal>
-                                <goal>test-compile</goal>
-                            </goals>
-                        </execution>
-                    </executions>
-                </plugin>
-
-                <!-- OS Maven Plugin (required for Protobuf) -->
-                <plugin>
-                    <groupId>kr.motd.maven</groupId>
-                    <artifactId>os-maven-plugin</artifactId>
-                    <version>1.7.1</version>
-                    <executions>
-                        <execution>
-                            <phase>initialize</phase>
-                            <goals>
-                                <goal>detect</goal>
-                            </goals>
-                        </execution>
-                    </executions>
-                </plugin>
                 <plugin>
                     <groupId>org.apache.avro</groupId>
                     <artifactId>avro-maven-plugin</artifactId>

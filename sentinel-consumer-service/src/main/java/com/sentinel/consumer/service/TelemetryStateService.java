@@ -23,6 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -194,26 +195,21 @@ public class TelemetryStateService {
   }
 
   private void persistAlertToRedis(AnomalyAlert alert) {
-    if (redisTemplate == null) {
-      return;
-    }
-    try {
-      String json = objectMapper.writeValueAsString(alert);
-      redisTemplate.opsForList().leftPush(REDIS_ALERTS_LIST_KEY, json);
-      redisTemplate.opsForList().trim(REDIS_ALERTS_LIST_KEY, 0, properties.getMaxAlerts() - 1L);
-    } catch (Exception ex) {
-      logRedisFallbackOnce(ex);
-    }
+    pushToRedisList(REDIS_ALERTS_LIST_KEY, alert);
   }
 
   private void persistDlqRecordToRedis(DlqMetricRecord record) {
+    pushToRedisList(REDIS_DLQ_LIST_KEY, record);
+  }
+
+  private void pushToRedisList(String key, Object item) {
     if (redisTemplate == null) {
       return;
     }
     try {
-      String json = objectMapper.writeValueAsString(record);
-      redisTemplate.opsForList().leftPush(REDIS_DLQ_LIST_KEY, json);
-      redisTemplate.opsForList().trim(REDIS_DLQ_LIST_KEY, 0, properties.getMaxAlerts() - 1L);
+      String json = objectMapper.writeValueAsString(item);
+      redisTemplate.opsForList().leftPush(key, json);
+      redisTemplate.opsForList().trim(key, 0, properties.getMaxAlerts() - 1L);
     } catch (Exception ex) {
       logRedisFallbackOnce(ex);
     }
@@ -231,14 +227,7 @@ public class TelemetryStateService {
       List<ServiceTelemetrySummary> result = new ArrayList<>();
       for (Object value : entries.values()) {
         if (value instanceof String json) {
-          try {
-            PersistedServiceState state = objectMapper.readValue(json, PersistedServiceState.class);
-            result.add(
-                ServiceAggregate.fromPersisted(state, Math.max(1, properties.getWindowSize()))
-                    .toSummary());
-          } catch (JsonProcessingException ex) {
-            result.add(objectMapper.readValue(json, ServiceTelemetrySummary.class));
-          }
+          deserializeServiceSummary(json).ifPresent(result::add);
         }
       }
       result.sort(Comparator.comparing(ServiceTelemetrySummary::serviceId));
@@ -256,14 +245,7 @@ public class TelemetryStateService {
     try {
       Object raw = redisTemplate.opsForHash().get(REDIS_SERVICES_HASH_KEY, serviceId);
       if (raw instanceof String json) {
-        try {
-          PersistedServiceState state = objectMapper.readValue(json, PersistedServiceState.class);
-          return Optional.of(
-              ServiceAggregate.fromPersisted(state, Math.max(1, properties.getWindowSize()))
-                  .toSummary());
-        } catch (JsonProcessingException ex) {
-          return Optional.of(objectMapper.readValue(json, ServiceTelemetrySummary.class));
-        }
+        return deserializeServiceSummary(json);
       }
     } catch (Exception ex) {
       logRedisFallbackOnce(ex);
@@ -271,30 +253,18 @@ public class TelemetryStateService {
     return Optional.empty();
   }
 
-  private List<AnomalyAlert> loadAlertsFromRedis() {
-    if (redisTemplate == null) {
-      return List.of();
-    }
+  private Optional<ServiceTelemetrySummary> deserializeServiceSummary(String json) {
     try {
-      List<String> rawList =
-          redisTemplate
-              .opsForList()
-              .range(REDIS_ALERTS_LIST_KEY, 0, properties.getMaxAlerts() - 1L);
-      if (rawList == null || rawList.isEmpty()) {
-        return List.of();
+      PersistedServiceState state = objectMapper.readValue(json, PersistedServiceState.class);
+      return Optional.of(
+          ServiceAggregate.fromPersisted(state, Math.max(1, properties.getWindowSize()))
+              .toSummary());
+    } catch (JsonProcessingException ex) {
+      try {
+        return Optional.of(objectMapper.readValue(json, ServiceTelemetrySummary.class));
+      } catch (JsonProcessingException ignored) {
+        return Optional.empty();
       }
-      List<AnomalyAlert> alerts = new ArrayList<>(rawList.size());
-      for (String json : rawList) {
-        try {
-          alerts.add(objectMapper.readValue(json, AnomalyAlert.class));
-        } catch (JsonProcessingException ignored) {
-          // Skip malformed entries
-        }
-      }
-      return alerts;
-    } catch (Exception ex) {
-      logRedisFallbackOnce(ex);
-      return List.of();
     }
   }
 
@@ -305,11 +275,7 @@ public class TelemetryStateService {
     try {
       Object raw = redisTemplate.opsForHash().get(REDIS_SERVICES_HASH_KEY, serviceId);
       if (raw instanceof String json) {
-        try {
-          return Optional.of(objectMapper.readValue(json, PersistedServiceState.class));
-        } catch (JsonProcessingException ex) {
-          return Optional.empty();
-        }
+        return Optional.of(objectMapper.readValue(json, PersistedServiceState.class));
       }
     } catch (Exception ex) {
       logRedisFallbackOnce(ex);
@@ -317,25 +283,25 @@ public class TelemetryStateService {
     return Optional.empty();
   }
 
-  private List<DlqMetricRecord> loadDlqRecordsFromRedis() {
+  private <T> List<T> loadListFromRedis(String key, Class<T> type) {
     if (redisTemplate == null) {
       return List.of();
     }
     try {
       List<String> rawList =
-          redisTemplate.opsForList().range(REDIS_DLQ_LIST_KEY, 0, properties.getMaxAlerts() - 1L);
+          redisTemplate.opsForList().range(key, 0, properties.getMaxAlerts() - 1L);
       if (rawList == null || rawList.isEmpty()) {
         return List.of();
       }
-      List<DlqMetricRecord> records = new ArrayList<>(rawList.size());
+      List<T> items = new ArrayList<>(rawList.size());
       for (String json : rawList) {
         try {
-          records.add(objectMapper.readValue(json, DlqMetricRecord.class));
+          items.add(objectMapper.readValue(json, type));
         } catch (JsonProcessingException ignored) {
           // Skip malformed entries
         }
       }
-      return records;
+      return items;
     } catch (Exception ex) {
       logRedisFallbackOnce(ex);
       return List.of();
@@ -343,39 +309,44 @@ public class TelemetryStateService {
   }
 
   private List<AnomalyAlert> mergeAlerts() {
-    List<AnomalyAlert> merged = new ArrayList<>();
-    Set<String> seen = new HashSet<>();
-    for (AnomalyAlert alert : recentAlerts) {
-      if (seen.add(alertKey(alert))) {
-        merged.add(alert);
-      }
-    }
-    for (AnomalyAlert alert : loadAlertsFromRedis()) {
-      if (seen.add(alertKey(alert))) {
-        merged.add(alert);
-      }
-    }
-    merged.sort((left, right) -> Long.compare(right.timestamp(), left.timestamp()));
-    return merged;
+    return mergeItems(
+        recentAlerts,
+        loadListFromRedis(REDIS_ALERTS_LIST_KEY, AnomalyAlert.class),
+        TelemetryStateService::alertKey,
+        (left, right) -> Long.compare(right.timestamp(), left.timestamp()));
   }
 
   private List<DlqMetricRecord> mergeDlqRecords() {
-    List<DlqMetricRecord> merged = new ArrayList<>();
-    Set<String> seen = new HashSet<>();
-    for (DlqMetricRecord record : dlqRecords) {
-      if (seen.add(dlqKey(record))) {
-        merged.add(record);
-      }
-    }
-    for (DlqMetricRecord record : loadDlqRecordsFromRedis()) {
-      if (seen.add(dlqKey(record))) {
-        merged.add(record);
-      }
-    }
-    merged.sort(
-        (left, right) -> Long.compare(right.receivedAtTimestamp(), left.receivedAtTimestamp()));
     int maxRecords = Math.max(1, properties.getMaxAlerts());
-    return merged.stream().limit(maxRecords).toList();
+    return mergeItems(
+            dlqRecords,
+            loadListFromRedis(REDIS_DLQ_LIST_KEY, DlqMetricRecord.class),
+            TelemetryStateService::dlqKey,
+            (left, right) -> Long.compare(right.receivedAtTimestamp(), left.receivedAtTimestamp()))
+        .stream()
+        .limit(maxRecords)
+        .toList();
+  }
+
+  private static <T> List<T> mergeItems(
+      Iterable<T> localItems,
+      List<T> redisItems,
+      Function<T, String> keyExtractor,
+      Comparator<T> comparator) {
+    List<T> merged = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    for (T item : localItems) {
+      if (seen.add(keyExtractor.apply(item))) {
+        merged.add(item);
+      }
+    }
+    for (T item : redisItems) {
+      if (seen.add(keyExtractor.apply(item))) {
+        merged.add(item);
+      }
+    }
+    merged.sort(comparator);
+    return merged;
   }
 
   private static String alertKey(AnomalyAlert alert) {

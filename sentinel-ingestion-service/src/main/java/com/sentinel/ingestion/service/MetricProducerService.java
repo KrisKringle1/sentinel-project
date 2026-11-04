@@ -22,23 +22,20 @@ public class MetricProducerService {
   public MetricProducerService(
       KafkaTemplate<String, SentinelMetric> kafkaTemplate,
       @Value("${sentinel.ingestion.topic.metrics:service-metrics}") String topic,
-      @Value("${sentinel.ingestion.topic.metrics.dlq:service-metrics-dlq}") String dlqTopic) {
+      @Value("${sentinel.ingestion.topic.metrics-dlq:service-metrics-dlq}") String dlqTopic) {
     this.kafkaTemplate = kafkaTemplate;
     this.topic = topic;
     this.dlqTopic = dlqTopic;
   }
 
   public CompletableFuture<SendResult<String, SentinelMetric>> sendMetric(MetricRequest request) {
-    if (request == null) {
-      throw new MetricProcessingException("MetricRequest cannot be null");
-    }
-
-    if (request.serviceId() == null || request.serviceId().isBlank()) {
-      throw new MetricProcessingException("ServiceId cannot be null or empty");
-    }
-
-    if (request.metricName() == null || request.metricName().isBlank()) {
-      throw new MetricProcessingException("MetricName cannot be null or empty");
+    if (request == null
+        || request.serviceId() == null
+        || request.serviceId().isBlank()
+        || request.metricName() == null
+        || request.metricName().isBlank()) {
+      throw new MetricProcessingException(
+          "MetricRequest, serviceId, and metricName must not be null or blank");
     }
 
     SentinelMetric metric =
